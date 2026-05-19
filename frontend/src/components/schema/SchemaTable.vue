@@ -254,28 +254,29 @@ const batchText = ref('')
 function doBatchImport() {
   const lines = batchText.value.trim().split('\n').filter(l => l.trim())
   const newRows: any[] = []
+  const cols = props.schema.columns || []
   for (const line of lines) {
     const parts = line.split('\t')
     const row: any = {}
-    for (const col of props.schema.columns || []) {
+    let partIdx = 0
+    for (const col of cols) {
       if (col.type === 'switch') {
         row[col.name] = col.default ?? true
       } else if (col.type === 'keyword-map') {
-        row[col.name] = {}
+        if (partIdx < parts.length) {
+          const kwText = parts[partIdx].trim()
+          row[col.name] = kwText ? parseCompact(kwText) : {}
+          partIdx++
+        } else {
+          row[col.name] = {}
+        }
       } else {
-        row[col.name] = ''
-      }
-    }
-    // 填充文本/路径列
-    const textCols = (props.schema.columns || []).filter((c: any) => c.type === 'text' || c.type === 'path')
-    for (let i = 0; i < Math.min(parts.length, textCols.length); i++) {
-      row[textCols[i].name] = parts[i].trim()
-    }
-    // 如果有第3列且存在keyword-map列，解析紧凑格式
-    if (parts.length > textCols.length && kwColName.value) {
-      const kwText = parts.slice(textCols.length).join('\t').trim()
-      if (kwText) {
-        row[kwColName.value] = parseCompact(kwText)
+        if (partIdx < parts.length) {
+          row[col.name] = parts[partIdx].trim()
+          partIdx++
+        } else {
+          row[col.name] = ''
+        }
       }
     }
     newRows.push(row)
@@ -337,5 +338,8 @@ function doBatchImport() {
   color: #303133;
   line-height: 1.6;
   margin: 4px 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-wrap: break-word;
 }
 </style>
