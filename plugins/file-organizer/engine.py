@@ -14,9 +14,9 @@ import concurrent.futures
 
 import pandas as pd
 
-from app.rules import parse_structured_keywords, build_search_path, build_filename_pattern
-from app.utils import format_eta
-from app.logger import logger
+from rules import parse_structured_keywords, build_search_path, build_filename_pattern
+import logging
+logger = logging.getLogger(__name__)
 
 
 def find_matching_files(search_paths_str, filename_patterns_str, primary_keyword, doc_type):

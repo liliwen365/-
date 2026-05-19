@@ -1,0 +1,96 @@
+name: "file-organizer"
+version: "1.0.0"
+display_name: "文件整理"
+description: "按规则搜索并整理文件到目标目录结构，支持NAS/本地路径"
+category: "file"
+icon: "assets/icon.png"
+color: "#2196F3"
+author: "LocalAgent"
+
+entry: "main:FileOrganizerPlugin"
+
+features:
+  - id: "scan_and_copy"
+    display_name: "扫描与整理"
+    description: "扫描源文件并复制到目标目录"
+    icon: "FolderSearch"
+
+params:
+  - name: "tasks"
+    type: "table"
+    label: "任务清单"
+    help: "添加需要整理的任务，每个任务对应一个报关单/合同的文件整理"
+    columns:
+      - name: "task_id"
+        label: "任务ID"
+        type: "text"
+        required: true
+        placeholder: "如: 报关单号"
+        width: 140
+      - name: "dest_root"
+        label: "目标存放路径"
+        type: "path"
+        required: true
+        width: 220
+      - name: "path_keywords"
+        label: "路径关键词"
+        type: "tags"
+        group_by: "doc_type"
+        help: "按文件分类指定路径关键词，如：发票:ABC001;报关单:DEF002"
+        width: 160
+      - name: "file_keywords"
+        label: "文件关键词"
+        type: "tags"
+        group_by: "doc_type"
+        help: "按文件分类指定文件关键词，如：发票:ABC001;报关单:DEF002"
+        width: 160
+      - name: "override_path"
+        label: "特定搜索路径"
+        type: "path"
+        width: 180
+      - name: "enabled"
+        label: "是否执行"
+        type: "switch"
+        default: true
+        width: 70
+
+  - name: "rules"
+    type: "table"
+    label: "文件规则库"
+    help: "定义各类文件的搜索路径、文件名模式和目标子文件夹"
+    columns:
+      - name: "doc_type"
+        label: "文件分类"
+        type: "select"
+        options: ["发票", "报关单", "合同", "提单", "装箱单", "核销单", "汇票", "其他"]
+        required: true
+        width: 100
+      - name: "search_path"
+        label: "源文件搜索路径"
+        type: "path"
+        required: true
+        placeholder: "支持{PathKeyword}占位符"
+        width: 280
+      - name: "filename_pattern"
+        label: "文件名模式"
+        type: "text"
+        required: true
+        placeholder: "如 *{PrimaryKeyword}*发票*.*"
+        width: 200
+      - name: "dest_subfolder"
+        label: "目标子文件夹"
+        type: "text"
+        width: 120
+      - name: "enabled"
+        label: "是否启用"
+        type: "switch"
+        default: true
+        width: 70
+
+templates:
+  - name: "出口退税资料整理"
+    file: "templates/出口退税资料整理.json"
+  - name: "合同归档整理"
+    file: "templates/合同归档整理.json"
+  - name: "项目资料整理"
+    file: "templates/项目资料整理.json"
