@@ -32,17 +32,10 @@ params:
         type: "path"
         required: true
         width: 220
-      - name: "path_keywords"
-        label: "路径关键词"
-        type: "tags"
-        group_by: "doc_type"
-        help: "按文件分类指定路径关键词，如：发票:ABC001;报关单:DEF002"
-        width: 160
-      - name: "file_keywords"
-        label: "文件关键词"
-        type: "tags"
-        group_by: "doc_type"
-        help: "按文件分类指定文件关键词，如：发票:ABC001;报关单:DEF002"
+      - name: "keywords"
+        label: "关键字配置"
+        type: "keyword-map"
+        help: "按文件分类配置路径和文件关键词"
         width: 160
       - name: "override_path"
         label: "特定搜索路径"

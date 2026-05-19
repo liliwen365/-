@@ -1,37 +1,37 @@
 [
   {
-    "文件分类": "发票",
-    "源文件搜索路径": "\\\\NAS-Server\\退税资料\\{PathKeyword}",
-    "文件名模式": "*{PrimaryKeyword}*发票*.*",
-    "目标子文件夹": "发票",
-    "是否启用": "Y"
+    "doc_type": "发票",
+    "search_path": "\\\\NAS-Server\\退税资料\\{PathKeyword}",
+    "filename_pattern": "*{PrimaryKeyword}*发票*.*",
+    "dest_subfolder": "发票",
+    "enabled": true
   },
   {
-    "文件分类": "报关单",
-    "源文件搜索路径": "\\\\NAS-Server\\退税资料\\{PathKeyword}",
-    "文件名模式": "*{PrimaryKeyword}*报关*.*",
-    "目标子文件夹": "报关单",
-    "是否启用": "Y"
+    "doc_type": "报关单",
+    "search_path": "\\\\NAS-Server\\退税资料\\{PathKeyword}",
+    "filename_pattern": "*{PrimaryKeyword}*报关*.*",
+    "dest_subfolder": "报关单",
+    "enabled": true
   },
   {
-    "文件分类": "合同",
-    "源文件搜索路径": "\\\\NAS-Server\\退税资料\\{PathKeyword}",
-    "文件名模式": "*{PrimaryKeyword}*合同*.*",
-    "目标子文件夹": "合同",
-    "是否启用": "Y"
+    "doc_type": "合同",
+    "search_path": "\\\\NAS-Server\\退税资料\\{PathKeyword}",
+    "filename_pattern": "*{PrimaryKeyword}*合同*.*",
+    "dest_subfolder": "合同",
+    "enabled": true
   },
   {
-    "文件分类": "装箱单",
-    "源文件搜索路径": "\\\\NAS-Server\\退税资料\\{PathKeyword}",
-    "文件名模式": "*{PrimaryKeyword}*装箱*.*",
-    "目标子文件夹": "装箱单",
-    "是否启用": "Y"
+    "doc_type": "装箱单",
+    "search_path": "\\\\NAS-Server\\退税资料\\{PathKeyword}",
+    "filename_pattern": "*{PrimaryKeyword}*装箱*.*",
+    "dest_subfolder": "装箱单",
+    "enabled": true
   },
   {
-    "文件分类": "提单",
-    "源文件搜索路径": "\\\\NAS-Server\\退税资料\\{PathKeyword}",
-    "文件名模式": "*{PrimaryKeyword}*提单*.*",
-    "目标子文件夹": "提单",
-    "是否启用": "Y"
+    "doc_type": "提单",
+    "search_path": "\\\\NAS-Server\\退税资料\\{PathKeyword}",
+    "filename_pattern": "*{PrimaryKeyword}*提单*.*",
+    "dest_subfolder": "提单",
+    "enabled": true
   }
 ]

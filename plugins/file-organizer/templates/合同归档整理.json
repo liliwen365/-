@@ -1,23 +1,23 @@
 [
   {
-    "文件分类": "合同",
-    "源文件搜索路径": "D:\\合同文件\\{PathKeyword}",
-    "文件名模式": "*{PrimaryKeyword}*合同*.*",
-    "目标子文件夹": "合同",
-    "是否启用": "Y"
+    "doc_type": "合同",
+    "search_path": "D:\\合同文件\\{PathKeyword}",
+    "filename_pattern": "*{PrimaryKeyword}*合同*.*",
+    "dest_subfolder": "合同",
+    "enabled": true
   },
   {
-    "文件分类": "附件",
-    "源文件搜索路径": "D:\\合同文件\\{PathKeyword}",
-    "文件名模式": "*{PrimaryKeyword}*附件*.*",
-    "目标子文件夹": "附件",
-    "是否启用": "Y"
+    "doc_type": "附件",
+    "search_path": "D:\\合同文件\\{PathKeyword}",
+    "filename_pattern": "*{PrimaryKeyword}*附件*.*",
+    "dest_subfolder": "附件",
+    "enabled": true
   },
   {
-    "文件分类": "发票",
-    "源文件搜索路径": "D:\\财务发票\\{PathKeyword}",
-    "文件名模式": "*{PrimaryKeyword}*发票*.*",
-    "目标子文件夹": "发票",
-    "是否启用": "Y"
+    "doc_type": "发票",
+    "search_path": "D:\\财务发票\\{PathKeyword}",
+    "filename_pattern": "*{PrimaryKeyword}*发票*.*",
+    "dest_subfolder": "发票",
+    "enabled": true
   }
 ]

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """文件整理插件 - 入口。"""
+import json
 import pandas as pd
 from backend.base_plugin import BasePlugin
 from engine import scan_tasks, execute_copy
@@ -28,6 +29,12 @@ class FileOrganizerPlugin(BasePlugin):
         rules_data = params.get("rules", [])
         action = params.get("action", "scan")
 
+        # 确保keywords字段是dict而非JSON字符串
+        for t in tasks_data:
+            kw = t.get("keywords", {})
+            if isinstance(kw, str):
+                t["keywords"] = json.loads(kw) if kw else {}
+
         tasks_df = pd.DataFrame(tasks_data) if tasks_data else pd.DataFrame()
         rules_df = pd.DataFrame(rules_data) if rules_data else pd.DataFrame()
 
@@ -38,7 +45,7 @@ class FileOrganizerPlugin(BasePlugin):
             tasks_df, plan_df = scan_tasks(tasks_df, rules_df, on_progress=progress_callback)
             plan_records = plan_df.to_dict("records") if not plan_df.empty else []
             total = len(plan_df)
-            found = len(plan_df[plan_df["查找状态"] == "已找到"]) if not plan_df.empty and "查找状态" in plan_df.columns else 0
+            found = len(plan_df[plan_df["find_status"] == "已找到"]) if not plan_df.empty and "find_status" in plan_df.columns else 0
             return {
                 "status": "success",
                 "summary": f"扫描完成：共 {total} 条计划，找到 {found} 个文件",
@@ -51,8 +58,8 @@ class FileOrganizerPlugin(BasePlugin):
             if plan_df.empty:
                 return {"status": "error", "summary": "没有可执行的复制计划", "data": {}}
             tasks_df, plan_df = execute_copy(tasks_df, plan_df, on_progress=progress_callback)
-            copied = len(plan_df[plan_df["复制状态"] == "已复制"])
-            failed = len(plan_df[plan_df["复制状态"] == "复制失败"])
+            copied = len(plan_df[plan_df["copy_status"] == "已复制"])
+            failed = len(plan_df[plan_df["copy_status"] == "复制失败"])
             return {
                 "status": "success",
                 "summary": f"复制完成：成功 {copied}，失败 {failed}",
