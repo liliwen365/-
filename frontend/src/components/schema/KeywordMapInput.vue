@@ -32,7 +32,7 @@
             allow-create
             default-first-option
             :reserve-keyword="false"
-            placeholder="输入后回车添加"
+            placeholder="输入后回车，.匹配所有文件"
             size="small"
             style="flex: 1"
           />

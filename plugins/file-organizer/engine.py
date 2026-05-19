@@ -170,8 +170,9 @@ def scan_tasks(tasks_df, rules_df, on_progress=None):
     Returns: (updated_tasks_df, plan_df)
     """
     tasks_df = tasks_df.copy()
-    # enabled: 支持布尔值和Y/N字符串
-    tasks_to_scan = tasks_df[tasks_df['enabled'].apply(
+    # enabled_scan: 扫描开关（兼容旧字段enabled）
+    scan_col = 'enabled_scan' if 'enabled_scan' in tasks_df.columns else 'enabled'
+    tasks_to_scan = tasks_df[tasks_df[scan_col].apply(
         lambda x: str(x).upper() in ('Y', 'TRUE', '1') if pd.notna(x) else False
     )]
     active_rules = rules_df[rules_df['enabled'].apply(
@@ -280,7 +281,10 @@ def execute_copy(tasks_df, plan_df, on_progress=None, retry_attempts=3, retry_de
         if task_id in tasks_df.index:
             tasks_df.loc[task_id, ['status', 'scan_summary']] = status, scan_summary
             if status == "已完成":
-                tasks_df.loc[task_id, 'enabled'] = False
+                # 完成后关闭扫描和复制开关
+                for col in ['enabled_scan', 'enabled_copy', 'enabled']:
+                    if col in tasks_df.columns:
+                        tasks_df.loc[task_id, col] = False
 
     tasks_df = tasks_df.reset_index()
 

@@ -132,6 +132,15 @@
         <el-table-column prop="source_path" label="源文件" show-overflow-tooltip />
         <el-table-column prop="dest_path" label="目标路径" show-overflow-tooltip />
         <el-table-column prop="error_msg" label="错误" width="150" show-overflow-tooltip />
+        <el-table-column label="操作" width="80" v-if="copyDone">
+          <template #default="{ row }">
+            <el-button
+              v-if="row.copy_status === '已复制' && row.dest_path"
+              link type="primary" size="small"
+              @click="openFolder(row.dest_path)"
+            >打开</el-button>
+          </template>
+        </el-table-column>
       </el-table>
     </el-card>
 
@@ -180,7 +189,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { pluginApi } from '@/api'
+import { pluginApi, systemApi } from '@/api'
 import { ElMessage } from 'element-plus'
 import SchemaTable from '@/components/schema/SchemaTable.vue'
 
@@ -324,6 +333,16 @@ async function loadHistory() {
 watch(historyDialogVisible, (v) => {
   if (v) loadHistory()
 })
+
+async function openFolder(filePath: string) {
+  // 打开文件所在目录
+  const dir = filePath.substring(0, filePath.lastIndexOf('/'))
+  try {
+    await systemApi.openFolder(dir)
+  } catch {
+    ElMessage.error('无法打开文件夹')
+  }
+}
 </script>
 
 <style scoped>

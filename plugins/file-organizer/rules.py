@@ -26,8 +26,13 @@ def build_search_path(rule_path_template, path_keyword, override_path=None):
 
 
 def build_filename_pattern(pattern_template, primary_keyword, doc_type):
-    """替换文件名模式中的占位符。"""
+    """替换文件名模式中的占位符。
+
+    特殊处理：当文件关键词为"."时，`*{PrimaryKeyword}*`变为`*.*`，
+    匹配所有含扩展名的文件（即该目录下所有文件）。
+    """
     result = _normalize_placeholders(str(pattern_template))
-    result = result.replace("{PrimaryKeyword}", str(primary_keyword or ''))
+    kw = str(primary_keyword or '')
+    result = result.replace("{PrimaryKeyword}", kw)
     result = result.replace("{DocumentType}", str(doc_type or ''))
     return result

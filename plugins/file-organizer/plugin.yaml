@@ -41,11 +41,16 @@ params:
         label: "特定搜索路径"
         type: "path"
         width: 180
-      - name: "enabled"
-        label: "是否执行"
+      - name: "enabled_scan"
+        label: "扫描"
         type: "switch"
         default: true
-        width: 70
+        width: 55
+      - name: "enabled_copy"
+        label: "复制"
+        type: "switch"
+        default: true
+        width: 55
 
   - name: "rules"
     type: "table"
@@ -55,7 +60,7 @@ params:
       - name: "doc_type"
         label: "文件分类"
         type: "select"
-        options: ["发票", "报关单", "合同", "提单", "装箱单", "核销单", "汇票", "其他"]
+        options: ["发票", "报关单", "采购合同", "销售合同", "合同", "提单", "装箱单", "核销单", "汇票", "其他"]
         required: true
         width: 100
       - name: "search_path"

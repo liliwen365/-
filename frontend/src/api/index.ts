@@ -6,6 +6,7 @@ export default api
 
 export const systemApi = {
   getInfo: () => api.get('/api/system/info'),
+  openFolder: (path: string) => api.post('/api/system/open-folder', { path }),
 }
 
 export const authApi = {
