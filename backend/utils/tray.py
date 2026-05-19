@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""系统托盘 - pystray。"""
+"""系统托盘 - pystray。macOS上必须由主线程调用。"""
 import webbrowser
 from backend.logger import logger
 
@@ -9,7 +9,7 @@ def run_tray(url: str):
         import pystray
         from PIL import Image, ImageDraw
     except ImportError:
-        return
+        raise RuntimeError("pystray或Pillow未安装")
 
     def create_icon():
         img = Image.new("RGBA", (64, 64), (33, 150, 243, 255))
@@ -34,4 +34,5 @@ def run_tray(url: str):
             pystray.MenuItem("退出", on_exit),
         ),
     )
+    # run()阻塞主线程，直到icon.stop()被调用
     icon.run()

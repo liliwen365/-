@@ -2,22 +2,15 @@
 """本地自动化平台 - 程序入口。"""
 import sys
 import os
+import time
 import webbrowser
 import threading
-import signal
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from backend.config import settings
 from backend.logger import logger
 from backend.auth import SecurityManager
-
-
-def find_free_port() -> int:
-    import socket
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((settings.HOST, 0))
-        return s.getsockname()[1]
 
 
 def start_server(port: int):
@@ -31,8 +24,8 @@ def main():
 
     # 授权检查
     security = SecurityManager()
-    db = __import__("backend.database", fromlist=["SessionLocal"]).SessionLocal()
-    SettingModel = __import__("backend.database", fromlist=["SettingModel"]).SettingModel
+    from backend.database import SessionLocal, SettingModel
+    db = SessionLocal()
     row = db.query(SettingModel).filter(SettingModel.key == "license_code").first()
     license_code = row.value if row else ""
     db.close()
@@ -40,30 +33,24 @@ def main():
     if not security.is_activated(license_code):
         logger.warning("软件未授权，请访问 http://localhost:{}/ 激活".format(port))
 
-    # 启动FastAPI
+    # 启动FastAPI（后台线程）
     server_thread = threading.Thread(target=start_server, args=(port,), daemon=True)
     server_thread.start()
 
     # 等待服务就绪后打开浏览器
-    import time
     time.sleep(1.5)
     url = f"http://localhost:{port}"
     logger.info(f"打开浏览器: {url}")
     webbrowser.open(url)
 
-    # 系统托盘（可选，失败不影响使用）
+    # macOS上pystray必须在主线程运行，所以主线程跑托盘
+    # Windows/Linux上托盘在子线程也可以，但统一在主线程更稳定
     try:
         from backend.utils.tray import run_tray
-        tray_thread = threading.Thread(target=run_tray, args=(url,), daemon=True)
-        tray_thread.start()
+        logger.info("系统托盘已启动，关闭托盘图标退出程序")
+        run_tray(url)  # 阻塞主线程，直到用户点退出
     except Exception as e:
-        logger.debug(f"系统托盘不可用: {e}")
-
-    # 主线程等待
-    try:
-        signal.pause()
-    except (KeyboardInterrupt, AttributeError):
-        # macOS不支持signal.pause，用join代替
+        logger.debug(f"系统托盘不可用: {e}，按Ctrl+C退出")
         try:
             while True:
                 time.sleep(1)
