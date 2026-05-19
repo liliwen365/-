@@ -26,11 +26,16 @@
     <!-- 首次使用引导 -->
     <el-alert v-if="!formData.rules?.length" type="info" :closable="false" style="margin-bottom: 16px">
       <template #title>欢迎使用「文件整理」</template>
-      <p>请先加载规则模板或手动配置规则。规则配置好后，日常只需添加任务即可。</p>
+      <p><b>使用步骤：</b></p>
+      <ol style="margin: 4px 0; padding-left: 20px">
+        <li>点击下方<b>「加载模板」</b>选择规则模板（如"出口退税资料整理"），或手动<b>「配置规则」</b></li>
+        <li>在任务清单中<b>添加任务</b>，每个任务填写：任务ID、目标路径、关键字配置</li>
+        <li>点击<b>「扫描」</b>查找匹配文件，确认后点击<b>「复制」</b></li>
+      </ol>
+      <p style="color: #909399; font-size: 12px">规则配置一次后无需重复设置，日常只需添加新任务即可。月中新增文件后，直接再点扫描即可。</p>
       <div style="margin-top: 8px">
-        <el-button size="small" type="primary" @click="rulesDialogVisible = true">配置规则</el-button>
-        <el-dropdown v-if="pluginInfo.templates?.length" style="margin-left: 8px" @command="onLoadTemplate">
-          <el-button size="small">加载模板</el-button>
+        <el-dropdown v-if="pluginInfo.templates?.length" style="margin-right: 8px" @command="onLoadTemplate">
+          <el-button size="small" type="primary">加载模板</el-button>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item v-for="t in pluginInfo.templates" :key="t.name" :command="t.name">
@@ -39,6 +44,7 @@
             </el-dropdown-menu>
           </template>
         </el-dropdown>
+        <el-button size="small" @click="rulesDialogVisible = true">手动配置规则</el-button>
       </div>
     </el-alert>
 
@@ -57,7 +63,7 @@
       <template #header>
         <span>任务清单</span>
         <span style="color: #999; font-size: 12px; margin-left: 8px">
-          每个任务对应一个报关单/合同的文件整理
+          点击「添加」新增任务，或「批量导入」从Excel粘贴。点击「关键字配置」列设置各分类的关键词
         </span>
       </template>
       <SchemaTable

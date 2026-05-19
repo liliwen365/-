@@ -20,6 +20,8 @@ const router = createRouter({
   routes: staticRoutes,
 })
 
+let dynamicRoutesLoaded = false
+
 // 动态路由注册：从后端获取已安装插件并注册路由
 export async function setupDynamicRoutes() {
   try {
@@ -40,9 +42,24 @@ export async function setupDynamicRoutes() {
       }
       router.addRoute(route)
     }
+    dynamicRoutesLoaded = true
   } catch (e) {
     console.warn('加载动态路由失败:', e)
+    dynamicRoutesLoaded = true // 标记为已尝试，避免无限等待
   }
 }
+
+// 导航守卫：确保动态路由在导航前加载
+router.beforeEach(async (to, from, next) => {
+  if (!dynamicRoutesLoaded) {
+    await setupDynamicRoutes()
+    // 动态路由已注册，重新导航以匹配新路由
+    if (to.path.startsWith('/plugin/')) {
+      next({ ...to, replace: true })
+      return
+    }
+  }
+  next()
+})
 
 export default router

@@ -1,5 +1,11 @@
 <template>
   <div class="keyword-map-input">
+    <!-- 使用提示 -->
+    <div class="usage-tip">
+      <el-icon><InfoFilled /></el-icon>
+      <span>为每个文件分类设置关键词：输入文字后按回车添加标签。<b>路径关键词</b>用于替换搜索路径中的占位符，<b>文件关键词</b>用于匹配文件名。输入<b>.</b>表示匹配该路径下所有文件。</span>
+    </div>
+
     <!-- 无分类时提示 -->
     <el-empty v-if="!docTypes.length" description="请先在规则库中添加文件分类" :image-size="60" />
 
@@ -44,6 +50,7 @@
 
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
+import { InfoFilled } from '@element-plus/icons-vue'
 
 const props = defineProps<{
   modelValue: Record<string, { path: string[]; file: string[] }>
@@ -109,5 +116,20 @@ watch(
   color: #909399;
   white-space: nowrap;
   min-width: 70px;
+}
+.usage-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 10px;
+  background: #f0f9eb;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: #67c23a;
+  line-height: 1.5;
+}
+.usage-tip span {
+  color: #606266;
 }
 </style>

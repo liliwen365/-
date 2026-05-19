@@ -54,7 +54,6 @@ import { onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { usePluginStore } from '@/stores/plugin'
 import { useAuthStore } from '@/stores/auth'
-import { setupDynamicRoutes } from '@/router'
 
 const route = useRoute()
 const pluginStore = usePluginStore()
@@ -63,7 +62,7 @@ const authStore = useAuthStore()
 onMounted(async () => {
   await authStore.checkStatus()
   await pluginStore.fetchPlugins()
-  await setupDynamicRoutes()
+  // 动态路由由router.beforeEach守卫加载，此处不再调用setupDynamicRoutes
 })
 </script>
 
