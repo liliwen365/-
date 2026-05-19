@@ -234,16 +234,22 @@ function formatSize(bytes: number): string {
 
 // 自动保存
 let saveTimer: ReturnType<typeof setTimeout> | null = null
+let saving = false
 watch(formData, () => {
+  if (saving) return
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(() => saveConfig(), 1000)
 }, { deep: true })
 
 async function saveConfig() {
+  if (saving) return
+  saving = true
   try {
     await pluginApi.saveConfig(pluginName.value, formData.value)
   } catch {
     // 静默失败，不干扰用户
+  } finally {
+    saving = false
   }
 }
 

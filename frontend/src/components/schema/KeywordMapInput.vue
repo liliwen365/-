@@ -18,7 +18,8 @@
         <div class="field-row">
           <span class="field-label">路径关键词</span>
           <el-select
-            v-model="innerValue[dt].path"
+            :model-value="getKeywords(dt, 'path')"
+            @update:model-value="(val: string[]) => setKeywords(dt, 'path', val)"
             multiple
             filterable
             allow-create
@@ -32,7 +33,8 @@
         <div class="field-row">
           <span class="field-label">文件关键词</span>
           <el-select
-            v-model="innerValue[dt].file"
+            :model-value="getKeywords(dt, 'file')"
+            @update:model-value="(val: string[]) => setKeywords(dt, 'file', val)"
             multiple
             filterable
             allow-create
@@ -49,7 +51,6 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
 import { InfoFilled } from '@element-plus/icons-vue'
 
 const props = defineProps<{
@@ -58,30 +59,30 @@ const props = defineProps<{
 }>()
 const emit = defineEmits(['update:modelValue'])
 
-// 确保每个docType都有条目
-const innerValue = computed(() => {
-  const val: Record<string, { path: string[]; file: string[] }> = {}
-  for (const dt of props.docTypes) {
-    val[dt] = props.modelValue?.[dt] || { path: [], file: [] }
-  }
-  return val
-})
+function getKeywords(dt: string, field: 'path' | 'file'): string[] {
+  return props.modelValue?.[dt]?.[field] || []
+}
 
-// 深度监听变化并emit
-watch(
-  () => innerValue.value,
-  (newVal) => {
-    // 只emit有值的分类，避免空数据污染
-    const filtered: Record<string, { path: string[]; file: string[] }> = {}
-    for (const [k, v] of Object.entries(newVal)) {
-      if (v.path.length || v.file.length) {
-        filtered[k] = v
-      }
+function setKeywords(dt: string, field: 'path' | 'file', val: string[]) {
+  const newVal: Record<string, { path: string[]; file: string[] }> = {}
+  // 保留有值的分类
+  for (const [k, v] of Object.entries(props.modelValue || {})) {
+    newVal[k] = { ...v }
+  }
+  // 确保当前分类存在
+  if (!newVal[dt]) {
+    newVal[dt] = { path: [], file: [] }
+  }
+  newVal[dt][field] = val
+  // 清理空分类
+  const filtered: Record<string, { path: string[]; file: string[] }> = {}
+  for (const [k, v] of Object.entries(newVal)) {
+    if (v.path.length || v.file.length) {
+      filtered[k] = v
     }
-    emit('update:modelValue', filtered)
-  },
-  { deep: true }
-)
+  }
+  emit('update:modelValue', filtered)
+}
 </script>
 
 <style scoped>
