@@ -3,12 +3,13 @@
     <el-card>
       <template #header>授权管理</template>
       <el-descriptions :column="1" border>
-        <el-descriptions-item label="机器码">
+        <el-descriptions-item label="机器码（设备标识）">
           <el-input :model-value="authStore.machineId" readonly>
             <template #append>
               <el-button @click="copyMachineId">复制</el-button>
             </template>
           </el-input>
+          <div style="color:#909399;font-size:12px;margin-top:4px">此码用于标识当前设备，请复制后发送给供应商以获取授权码</div>
         </el-descriptions-item>
         <el-descriptions-item label="授权状态">
           <el-tag :type="authStore.activated ? 'success' : 'danger'">
@@ -18,7 +19,7 @@
       </el-descriptions>
 
       <div v-if="!authStore.activated" style="margin-top: 16px">
-        <el-input v-model="licenseCode" type="textarea" :rows="3" placeholder="请粘贴授权码" />
+        <el-input v-model="licenseCode" type="textarea" :rows="3" placeholder="请粘贴从供应商获取的授权码" />
         <el-button type="primary" style="margin-top: 8px" :loading="activating" @click="onActivate">
           验证并激活
         </el-button>
@@ -40,7 +41,7 @@ onMounted(() => authStore.checkStatus())
 
 function copyMachineId() {
   navigator.clipboard.writeText(authStore.machineId)
-  ElMessage.success('机器码已复制')
+  ElMessage.success('机器码已复制，请发送给供应商以获取授权码')
 }
 
 async function onActivate() {
@@ -57,7 +58,7 @@ async function onActivate() {
       ElMessage.error(data.message)
     }
   } catch {
-    ElMessage.error('激活请求失败')
+    ElMessage.error('激活失败，请检查网络连接后重试。如问题持续，请联系供应商。')
   } finally {
     activating.value = false
   }

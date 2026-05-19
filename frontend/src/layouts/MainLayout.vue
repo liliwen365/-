@@ -38,7 +38,7 @@
       <el-header class="header">
         <span class="page-title">{{ route.meta.title || '本地自动化平台' }}</span>
         <div class="header-right">
-          <el-tag v-if="!authStore.activated" type="danger" size="small">未授权</el-tag>
+          <el-tag v-if="!authStore.activated" type="danger" size="small" style="cursor:pointer" @click="$router.push('/settings')">未授权 - 点击激活</el-tag>
           <el-tag v-else type="success" size="small">已授权</el-tag>
         </div>
       </el-header>

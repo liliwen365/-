@@ -5,6 +5,9 @@
       <div>
         <el-button size="small" @click="onAdd">添加</el-button>
         <el-button size="small" @click="showBatchImport = true">批量导入</el-button>
+        <el-button v-if="kwColName" size="small" type="warning" :disabled="!selected.length" @click="openBulkKeywordDialog">
+          批量设置关键词 ({{ selected.length }})
+        </el-button>
         <el-button size="small" type="danger" :disabled="!selected.length" @click="onDel">删除</el-button>
       </div>
     </div>
@@ -26,9 +29,9 @@
             <span v-if="Object.keys(row[col.name] || {}).length > 3" style="color: #909399; font-size: 12px">
               +{{ Object.keys(row[col.name] || {}).length - 3 }}
             </span>
-            <span v-if="!Object.keys(row[col.name] || {}).length" style="color: #c0c4cc; font-size: 12px">点击配置</span>
+            <span v-if="!Object.keys(row[col.name] || {}).length" style="color: #c0c4cc; font-size: 12px">点击设置关键词</span>
           </div>
-          <el-select v-else-if="col.type === 'select'" v-model="row[col.name]" size="small" placeholder="选择">
+          <el-select v-else-if="col.type === 'select'" v-model="row[col.name]" size="small" :placeholder="'请选择' + col.label">
             <el-option v-for="opt in col.options" :key="opt" :label="opt" :value="opt" />
           </el-select>
           <el-switch v-else-if="col.type === 'switch'" v-model="row[col.name]" size="small" />
@@ -37,13 +40,13 @@
               <el-button @click="browsePath(col.name, $index)">浏览</el-button>
             </template>
           </el-input>
-          <el-input v-else v-model="row[col.name]" size="small" :placeholder="col.placeholder || ''" />
+          <el-input v-else v-model="row[col.name]" size="small" :placeholder="col.placeholder || '请输入' + col.label" />
         </template>
       </el-table-column>
     </el-table>
 
-    <!-- 关键字配置对话框 -->
-    <el-dialog v-model="keywordDialogVisible" title="关键字配置" width="560px" destroy-on-close>
+    <!-- 单行关键字配置对话框 -->
+    <el-dialog v-model="keywordDialogVisible" title="搜索关键词设置" width="560px" destroy-on-close>
       <KeywordMapInput
         v-model="keywordDialogValue"
         :doc-types="docTypes"
@@ -54,17 +57,44 @@
       </template>
     </el-dialog>
 
+    <!-- 批量设置关键字对话框（选中多行后） -->
+    <el-dialog v-model="bulkKeywordVisible" title="批量设置关键词" width="560px" destroy-on-close>
+      <div class="usage-tip">
+        <el-icon><InfoFilled /></el-icon>
+        <span>配置的关键词将<b>覆盖</b>所有选中行的关键词设置。可在「文本模式」中直接粘贴，如：<code>采购合同:.;销售合同:.;发票:26432000000695401411</code></span>
+      </div>
+      <KeywordMapInput
+        v-model="bulkKeywordValue"
+        :doc-types="docTypes"
+      />
+      <template #footer>
+        <el-button @click="bulkKeywordVisible = false">取消</el-button>
+        <el-button type="primary" @click="saveBulkKeyword">应用到 {{ selected.length }} 行</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 批量导入对话框 -->
-    <el-dialog v-model="showBatchImport" title="批量导入任务" width="600px" destroy-on-close>
-      <p style="color: #909399; font-size: 12px; margin-bottom: 8px">
-        从Excel复制多行数据，粘贴到下方。格式：任务ID(Tab)目标路径，每行一个任务
-      </p>
+    <el-dialog v-model="showBatchImport" title="批量导入任务" width="650px" destroy-on-close>
+      <div class="import-help">
+        <p><b>使用方法：</b>在Excel中选中多行数据，复制后粘贴到下方输入框。</p>
+        <p><b>格式要求：</b>每行一个任务，列之间用Tab分隔。</p>
+        <ul style="margin: 4px 0; padding-left: 20px">
+          <li>第1列=任务ID，第2列=目标存放路径</li>
+          <li>第3列（可选）=关键字配置，格式：<code>分类:关键词;分类:关键词</code></li>
+        </ul>
+        <p><b>示例（2列，无关键字）：</b></p>
+        <pre class="import-example">CG-MLG-202603090011	D:\出口退税\202603批次\出口退税资料
+CG-DX-202602100009	D:\出口退税\202603批次\出口退税资料</pre>
+        <p><b>示例（3列，含关键字）：</b></p>
+        <pre class="import-example">CG-MLG-202603090011	D:\出口退税\202603批次\出口退税资料	采购合同:.;销售合同:.;发票:26432000000695401411;报关单:报关单
+CG-DX-202602100009	D:\出口退税\202603批次\出口退税资料	采购合同:.;销售合同:.;发票:26432000000695401412;报关单:报关单</pre>
+        <p style="color: #909399; font-size: 12px">提示：第3列关键字格式与Excel中一致，多个分类用分号分隔，分类名和关键词用冒号分隔。多个关键词用逗号分隔。输入 . 匹配所有文件。</p>
+      </div>
       <el-input
         v-model="batchText"
         type="textarea"
         :rows="8"
-        placeholder="在此粘贴Excel数据..."
-        @paste="onBatchPaste"
+        placeholder="从Excel复制后在此粘贴，每行一个任务..."
       />
       <template #footer>
         <el-button @click="showBatchImport = false">取消</el-button>
@@ -76,14 +106,13 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { QuestionFilled } from '@element-plus/icons-vue'
+import { QuestionFilled, InfoFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import KeywordMapInput from './KeywordMapInput.vue'
 
 const props = defineProps<{
   schema: any
   modelValue: any[]
-  /** 规则表数据，用于提取doc_type列表 */
   rulesData?: any[]
 }>()
 const emit = defineEmits(['update:modelValue'])
@@ -98,6 +127,31 @@ const docTypes = computed(() => {
   }
   return Array.from(types)
 })
+
+// 找到 keyword-map 类型的列名
+const kwColName = computed(() => {
+  for (const col of props.schema.columns || []) {
+    if (col.type === 'keyword-map') return col.name
+  }
+  return ''
+})
+
+// 紧凑格式 → keyword-map dict
+function parseCompact(text: string): Record<string, { path: string[]; file: string[] }> {
+  const result: Record<string, { path: string[]; file: string[] }> = {}
+  if (!text.trim()) return result
+  const pairs = text.split(';').filter(s => s.trim())
+  for (const pair of pairs) {
+    const colonIdx = pair.indexOf(':')
+    if (colonIdx < 0) continue
+    const dt = pair.substring(0, colonIdx).trim()
+    const kwStr = pair.substring(colonIdx + 1).trim()
+    if (!dt) continue
+    const fileKws = kwStr ? kwStr.split(',').map(k => k.trim()).filter(k => k) : []
+    result[dt] = { path: [], file: fileKws }
+  }
+  return result
+}
 
 function keywordCount(keywords: any, dt: string): number {
   if (!keywords || !keywords[dt]) return 0
@@ -142,7 +196,7 @@ function browsePath(colName: string, index: number) {
   input.click()
 }
 
-// 关键字对话框
+// 单行关键字对话框
 const keywordDialogVisible = ref(false)
 const keywordDialogValue = ref<Record<string, { path: string[]; file: string[] }>>({})
 let keywordDialogColName = ''
@@ -152,7 +206,6 @@ function openKeywordDialog(colName: string, index: number) {
   keywordDialogColName = colName
   keywordDialogRowIndex = index
   const current = props.modelValue[index][colName] || {}
-  // 深拷贝确保编辑不影响原数据
   keywordDialogValue.value = JSON.parse(JSON.stringify(current))
   keywordDialogVisible.value = true
 }
@@ -164,16 +217,39 @@ function saveKeywordDialog() {
   keywordDialogVisible.value = false
 }
 
+// 批量设置关键字对话框
+const bulkKeywordVisible = ref(false)
+const bulkKeywordValue = ref<Record<string, { path: string[]; file: string[] }>>({})
+
+function openBulkKeywordDialog() {
+  if (!selected.value.length || !kwColName.value) return
+  // 尝试取第一行的关键字作为初始值（方便复用已有配置）
+  const firstRow = selected.value[0]
+  const current = firstRow[kwColName.value] || {}
+  bulkKeywordValue.value = JSON.parse(JSON.stringify(current))
+  bulkKeywordVisible.value = true
+}
+
+function saveBulkKeyword() {
+  if (!kwColName.value) return
+  const rows = [...props.modelValue]
+  const selectedSet = new Set(selected.value)
+  const kwVal = JSON.parse(JSON.stringify(bulkKeywordValue.value))
+  let count = 0
+  for (let i = 0; i < rows.length; i++) {
+    if (selectedSet.has(rows[i])) {
+      rows[i][kwColName.value] = JSON.parse(JSON.stringify(kwVal))
+      count++
+    }
+  }
+  emit('update:modelValue', rows)
+  bulkKeywordVisible.value = false
+  ElMessage.success(`已为 ${count} 行设置关键词`)
+}
+
 // 批量导入
 const showBatchImport = ref(false)
 const batchText = ref('')
-
-function onBatchPaste(e: ClipboardEvent) {
-  // 延迟让textarea接收粘贴内容
-  setTimeout(() => {
-    // 只做格式化，不自动导入
-  }, 0)
-}
 
 function doBatchImport() {
   const lines = batchText.value.trim().split('\n').filter(l => l.trim())
@@ -190,10 +266,17 @@ function doBatchImport() {
         row[col.name] = ''
       }
     }
-    // 按列顺序填充：第一列=task_id, 第二列=dest_root
+    // 填充文本/路径列
     const textCols = (props.schema.columns || []).filter((c: any) => c.type === 'text' || c.type === 'path')
     for (let i = 0; i < Math.min(parts.length, textCols.length); i++) {
       row[textCols[i].name] = parts[i].trim()
+    }
+    // 如果有第3列且存在keyword-map列，解析紧凑格式
+    if (parts.length > textCols.length && kwColName.value) {
+      const kwText = parts.slice(textCols.length).join('\t').trim()
+      if (kwText) {
+        row[kwColName.value] = parseCompact(kwText)
+      }
     }
     newRows.push(row)
   }
@@ -218,5 +301,41 @@ function doBatchImport() {
 .keyword-map-cell:hover {
   background: #f5f7fa;
   border-radius: 2px;
+}
+.usage-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 10px;
+  background: #fdf6ec;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: #e6a23c;
+  line-height: 1.5;
+}
+.usage-tip span {
+  color: #606266;
+}
+.usage-tip code {
+  background: #faecd8;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-size: 11px;
+  color: #333;
+}
+.import-help p {
+  margin: 4px 0;
+  font-size: 13px;
+  color: #606266;
+}
+.import-example {
+  background: #f5f7fa;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #303133;
+  line-height: 1.6;
+  margin: 4px 0;
 }
 </style>

@@ -18,7 +18,7 @@
           <el-icon><Setting /></el-icon> 规则设置
         </el-button>
         <el-button size="small" @click="historyDialogVisible = true">
-          <el-icon><Clock /></el-icon> 历史
+          <el-icon><Clock /></el-icon> 执行历史
         </el-button>
       </div>
     </div>
@@ -144,7 +144,7 @@
               v-if="row.copy_status === '已复制' && row.dest_path"
               link type="primary" size="small"
               @click="openFolder(row.dest_path)"
-            >打开</el-button>
+            >打开文件夹</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -155,14 +155,14 @@
       <el-alert type="info" :closable="false" style="margin-bottom: 12px">
         <template #title>规则说明</template>
         <p>规则定义了各类文件的搜索方式。配置一次后通常不需要修改，日常只需添加任务。</p>
-        <p><b>文件名匹配规则</b>：使用通配符模式匹配文件名。</p>
+        <p><b>文件名匹配规则</b>：使用特殊符号匹配文件名。</p>
         <ul style="margin: 4px 0; padding-left: 20px">
           <li><code>*</code> — 匹配任意字符，如 <code>*发票*</code> 匹配所有文件名含"发票"的文件</li>
-          <li><code>{文件关键词}</code> — 替换为你输入的文件关键词</li>
-          <li><code>{文件分类}</code> — 替换为当前规则分类名（如"发票"、"报关单"）</li>
-          <li>示例：<code>*{文件关键词}*发票*.*</code>，输入关键词"ABC001"后匹配 <code>*ABC001*发票*.*</code></li>
+          <li><code>{文件关键词}</code> — 会在扫描时自动替换为你在任务中设置的文件关键词</li>
+          <li><code>{文件分类}</code> — 会在扫描时自动替换为当前规则的分类名（如"发票"、"报关单"）</li>
+          <li>示例：规则写 <code>*{文件关键词}*发票*.*</code>，你在任务中输入文件关键词"ABC001"后，实际匹配 <code>*ABC001*发票*.*</code>，可找到如 <code>ABC001_增值税发票.pdf</code> 之类的文件</li>
         </ul>
-        <p><b>搜索路径</b>：使用 <code>{路径关键词}</code> 占位符，扫描时会替换为任务中配置的路径关键词。</p>
+        <p><b>搜索路径</b>：路径中的 <code>{路径关键词}</code> 会在扫描时自动替换为你在任务中设置的路径关键词。</p>
       </el-alert>
       <SchemaTable
         v-if="rulesParam"
@@ -187,7 +187,7 @@
         <el-table-column prop="summary" label="结果" show-overflow-tooltip />
         <el-table-column prop="created_at" label="执行时间" width="170" />
       </el-table>
-      <el-empty v-if="!history.length && !historyLoading" description="暂无执行记录" />
+      <el-empty v-if="!history.length && !historyLoading" description="暂无执行记录，执行扫描或复制后将在此显示" />
     </el-dialog>
   </div>
 </template>
@@ -275,7 +275,7 @@ async function onLoadTemplate(name: string) {
       saveConfig()
     }
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.detail || '加载失败')
+    ElMessage.error(e.response?.data?.detail || '加载模板失败，请检查网络后重试')
   }
 }
 
@@ -304,7 +304,7 @@ async function onScan() {
       ElMessage.error(data.summary)
     }
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.detail || '扫描失败')
+    ElMessage.error(e.response?.data?.detail || '扫描失败，请检查任务配置后重试')
   } finally {
     running.value = false
   }
@@ -323,7 +323,7 @@ async function onCopy() {
       ElMessage.error(data.summary)
     }
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.detail || '复制失败')
+    ElMessage.error(e.response?.data?.detail || '复制失败，请检查文件权限后重试')
   } finally {
     running.value = false
   }
@@ -352,7 +352,7 @@ async function openFolder(filePath: string) {
   try {
     await systemApi.openFolder(dir)
   } catch {
-    ElMessage.error('无法打开文件夹')
+    ElMessage.error('无法打开文件夹，文件可能已被移动或删除')
   }
 }
 </script>

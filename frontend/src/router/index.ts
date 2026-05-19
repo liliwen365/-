@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import MainLayout from '@/layouts/MainLayout.vue'
+import axios from 'axios'
+import { ElMessage } from 'element-plus'
 
 const staticRoutes: RouteRecordRaw[] = [
   {
@@ -25,7 +27,6 @@ let dynamicRoutesLoaded = false
 // 动态路由注册：从后端获取已安装插件并注册路由
 export async function setupDynamicRoutes() {
   try {
-    const { default: axios } = await import('axios')
     const { data } = await axios.get('/api/plugins/installed')
     for (const plugin of data.plugins || []) {
       const route: RouteRecordRaw = {
@@ -45,7 +46,8 @@ export async function setupDynamicRoutes() {
     dynamicRoutesLoaded = true
   } catch (e) {
     console.warn('加载动态路由失败:', e)
-    dynamicRoutesLoaded = true // 标记为已尝试，避免无限等待
+    dynamicRoutesLoaded = true
+    ElMessage.error('插件加载失败，请刷新页面重试')
   }
 }
 
