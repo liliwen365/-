@@ -25,7 +25,7 @@ def auth_status():
 
     if code:
         valid, msg = security.verify_license(code)
-        return {"activated": valid, "message": msg, "machine_id": security.get_machine_id()}
+        return {"activated": valid, "message": "已授权" if valid else "授权无效", "machine_id": security.get_machine_id()}
     return {"activated": False, "message": "未激活", "machine_id": security.get_machine_id()}
 
 
