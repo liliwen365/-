@@ -107,10 +107,21 @@ async def execute_plugin(name: str, body: ExecuteRequest):
     task_id = task.id
     db.close()
 
-    # 进度回调
-    async def on_progress(current, total, message=""):
-        eta = ""
-        await ws_manager.send_progress(name, current, total, message, eta)
+    # 进度回调（engine同步调用，4个参数: current, total, message/id, eta）
+    def on_progress(current, total, message="", eta=""):
+        try:
+            import asyncio
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.ensure_future(
+                    ws_manager.send_progress(name, current, total, str(message), str(eta))
+                )
+            else:
+                loop.run_until_complete(
+                    ws_manager.send_progress(name, current, total, str(message), str(eta))
+                )
+        except Exception:
+            pass
 
     # 执行（同步，后续改为子进程）
     try:

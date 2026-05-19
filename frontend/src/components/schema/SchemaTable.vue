@@ -10,7 +10,13 @@
     </div>
     <el-table :data="modelValue" @selection-change="onSelectionChange" size="small" border max-height="400">
       <el-table-column type="selection" width="40" />
-      <el-table-column v-for="col in schema.columns" :key="col.name" :label="col.label" :width="col.width">
+      <el-table-column v-for="col in schema.columns" :key="col.name" :width="col.width">
+        <template #header>
+          <span>{{ col.label }}</span>
+          <el-tooltip v-if="col.help" :content="col.help" placement="top">
+            <el-icon style="margin-left: 4px; color: #909399; cursor: help"><QuestionFilled /></el-icon>
+          </el-tooltip>
+        </template>
         <template #default="{ row, $index }">
           <!-- keyword-map: 点击弹对话框 -->
           <div v-if="col.type === 'keyword-map'" class="keyword-map-cell" @click="openKeywordDialog(col.name, $index)">
@@ -70,6 +76,8 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { QuestionFilled } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import KeywordMapInput from './KeywordMapInput.vue'
 
 const props = defineProps<{
@@ -196,8 +204,6 @@ function doBatchImport() {
   showBatchImport.value = false
   batchText.value = ''
 }
-
-import { ElMessage } from 'element-plus'
 </script>
 
 <style scoped>

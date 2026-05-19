@@ -1,23 +1,36 @@
 <template>
   <div class="plugin-page">
-    <!-- 步骤引导 -->
-    <el-steps :active="currentStep" finish-status="success" simple style="margin-bottom: 20px">
-      <el-step title="配置规则" />
-      <el-step title="添加任务" />
-      <el-step title="扫描预览" />
-      <el-step title="执行复制" />
-    </el-steps>
-
-    <!-- 步骤1: 规则配置 -->
-    <div v-show="currentStep === 0">
-      <el-alert v-if="!formData.rules?.length" type="info" :closable="false" style="margin-bottom: 16px">
-        <template #title>欢迎使用「{{ pluginInfo.display_name }}」</template>
-        <p>先加载规则模板或手动添加规则，定义各类文件的搜索路径和匹配模式。</p>
-      </el-alert>
-
-      <div style="margin-bottom: 12px; display: flex; gap: 8px">
+    <!-- 顶部标题栏 -->
+    <div class="page-header">
+      <h2>{{ pluginInfo.display_name || '文件整理' }}</h2>
+      <div class="header-actions">
         <el-dropdown v-if="pluginInfo.templates?.length" @command="onLoadTemplate">
-          <el-button>加载模板<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
+          <el-button size="small">加载模板<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item v-for="t in pluginInfo.templates" :key="t.name" :command="t.name">
+                {{ t.name }}
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <el-button size="small" @click="rulesDialogVisible = true">
+          <el-icon><Setting /></el-icon> 规则设置
+        </el-button>
+        <el-button size="small" @click="historyDialogVisible = true">
+          <el-icon><Clock /></el-icon> 历史
+        </el-button>
+      </div>
+    </div>
+
+    <!-- 首次使用引导 -->
+    <el-alert v-if="!formData.rules?.length" type="info" :closable="false" style="margin-bottom: 16px">
+      <template #title>欢迎使用「文件整理」</template>
+      <p>请先加载规则模板或手动配置规则。规则配置好后，日常只需添加任务即可。</p>
+      <div style="margin-top: 8px">
+        <el-button size="small" type="primary" @click="rulesDialogVisible = true">配置规则</el-button>
+        <el-dropdown v-if="pluginInfo.templates?.length" style="margin-left: 8px" @command="onLoadTemplate">
+          <el-button size="small">加载模板</el-button>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item v-for="t in pluginInfo.templates" :key="t.name" :command="t.name">
@@ -27,168 +40,145 @@
           </template>
         </el-dropdown>
       </div>
+    </el-alert>
 
-      <el-card>
-        <template #header>
-          <span>文件规则库</span>
-          <span style="color: #999; font-size: 12px; margin-left: 8px">定义各类文件的搜索路径、文件名模式和目标子文件夹</span>
-        </template>
-        <SchemaTable
-          v-if="rulesParam"
-          :schema="rulesParam"
-          v-model="formData.rules"
-        />
-      </el-card>
-
-      <div style="margin-top: 16px; text-align: right">
-        <el-button type="primary" :disabled="!formData.rules?.length" @click="currentStep = 1">
-          下一步：添加任务
-        </el-button>
-      </div>
+    <!-- 规则概览条 -->
+    <div v-if="formData.rules?.length" class="rules-summary">
+      <el-icon><InfoFilled /></el-icon>
+      <span>当前规则: {{ formData.rules.length }} 条</span>
+      <span v-for="r in formData.rules.filter((r: any) => r.enabled)" :key="r.doc_type" style="margin-left: 4px">
+        <el-tag size="small" type="primary">{{ r.doc_type }}</el-tag>
+      </span>
+      <el-button link size="small" @click="rulesDialogVisible = true" style="margin-left: 8px">修改</el-button>
     </div>
 
-    <!-- 步骤2: 任务添加 -->
-    <div v-show="currentStep === 1">
-      <el-card>
-        <template #header>
-          <span>任务清单</span>
-          <span style="color: #999; font-size: 12px; margin-left: 8px">每个任务对应一个报关单/合同的文件整理</span>
-        </template>
-        <SchemaTable
-          v-if="tasksParam"
-          :schema="tasksParam"
-          v-model="formData.tasks"
-          :rules-data="formData.rules"
-        />
-      </el-card>
-
-      <div style="margin-top: 16px; display: flex; justify-content: space-between">
-        <el-button @click="currentStep = 0">上一步</el-button>
-        <el-button type="primary" :disabled="!formData.tasks?.length" @click="currentStep = 2">
-          下一步：扫描预览
-        </el-button>
-      </div>
-    </div>
-
-    <!-- 步骤3: 扫描预览 -->
-    <div v-show="currentStep === 2">
-      <el-card>
-        <template #header>扫描文件</template>
-        <p style="color: #909399; margin-bottom: 12px">
-          点击"开始扫描"查找匹配的文件，扫描完成后可预览结果并标记跳过。
-        </p>
-        <el-button type="primary" size="large" :loading="running" @click="onScan">
-          <el-icon><Search /></el-icon> 开始扫描
-        </el-button>
-      </el-card>
-
-      <!-- 进度条 -->
-      <el-progress
-        v-if="running"
-        :percentage="progress.percent"
-        :format="() => progress.message"
-        style="margin-top: 16px"
-        :stroke-width="18"
-        striped
-        striped-flow
+    <!-- 任务清单（主区域） -->
+    <el-card style="margin-top: 16px">
+      <template #header>
+        <span>任务清单</span>
+        <span style="color: #999; font-size: 12px; margin-left: 8px">
+          每个任务对应一个报关单/合同的文件整理
+        </span>
+      </template>
+      <SchemaTable
+        v-if="tasksParam"
+        :schema="tasksParam"
+        v-model="formData.tasks"
+        :rules-data="formData.rules"
       />
+    </el-card>
 
-      <!-- 扫描结果 -->
-      <el-card v-if="plan.length" style="margin-top: 16px">
-        <template #header>
-          <span>扫描结果</span>
-          <el-tag type="success" style="margin-left: 8px">找到 {{ foundCount }} 个文件</el-tag>
-          <el-tag v-if="failCount" type="danger" style="margin-left: 4px">{{ failCount }} 项查找失败</el-tag>
-        </template>
-        <el-table :data="plan" max-height="400" size="small" border>
-          <el-table-column prop="task_id" label="任务ID" width="120" />
-          <el-table-column prop="doc_type" label="分类" width="80" />
-          <el-table-column label="查找状态" width="90">
-            <template #default="{ row }">
-              <el-tag :type="row.find_status === '已找到' ? 'success' : 'danger'" size="small">
-                {{ row.find_status }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="文件大小" width="100">
-            <template #default="{ row }">{{ formatSize(row.file_size) }}</template>
-          </el-table-column>
-          <el-table-column prop="file_mtime" label="修改时间" width="140" />
-          <el-table-column prop="source_path" label="源文件" show-overflow-tooltip />
-          <el-table-column prop="dest_path" label="目标路径" show-overflow-tooltip />
-          <el-table-column prop="error_msg" label="错误" width="150" show-overflow-tooltip />
-        </el-table>
-      </el-card>
-
-      <div style="margin-top: 16px; display: flex; justify-content: space-between">
-        <el-button @click="currentStep = 1">上一步</el-button>
-        <el-button type="success" :disabled="!foundCount || running" @click="currentStep = 3">
-          下一步：执行复制
-        </el-button>
-      </div>
+    <!-- 操作按钮 -->
+    <div class="action-bar">
+      <el-button
+        type="primary"
+        size="large"
+        :loading="running"
+        :disabled="!formData.tasks?.length || !formData.rules?.length"
+        @click="onScan"
+      >
+        <el-icon><Search /></el-icon> 扫描
+      </el-button>
+      <el-button
+        type="success"
+        size="large"
+        :loading="running"
+        :disabled="!foundCount"
+        @click="onCopy"
+      >
+        <el-icon><CopyDocument /></el-icon> 复制 ({{ foundCount }} 个文件)
+      </el-button>
     </div>
 
-    <!-- 步骤4: 执行复制 -->
-    <div v-show="currentStep === 3">
-      <el-card>
-        <template #header>执行复制</template>
-        <el-descriptions :column="2" border size="small" style="margin-bottom: 16px">
-          <el-descriptions-item label="待复制文件">{{ foundCount }} 个</el-descriptions-item>
-          <el-descriptions-item label="查找失败">{{ failCount }} 项</el-descriptions-item>
-        </el-descriptions>
-        <el-button type="success" size="large" :loading="running" @click="onCopy">
-          <el-icon><CopyDocument /></el-icon> 确认复制
-        </el-button>
-      </el-card>
+    <!-- 进度条 -->
+    <el-progress
+      v-if="running"
+      :percentage="progress.percent"
+      :format="() => progress.message"
+      style="margin-top: 16px"
+      :stroke-width="18"
+      striped
+      striped-flow
+    />
 
-      <!-- 进度条 -->
-      <el-progress
-        v-if="running"
-        :percentage="progress.percent"
-        :format="() => progress.message"
-        style="margin-top: 16px"
-        :stroke-width="18"
-        striped
-        striped-flow
+    <!-- 扫描/复制结果 -->
+    <el-card v-if="plan.length" style="margin-top: 16px">
+      <template #header>
+        <span>{{ copyDone ? '复制结果' : '扫描结果' }}</span>
+        <el-tag type="success" style="margin-left: 8px">找到 {{ foundCount }} 个文件</el-tag>
+        <el-tag v-if="failCount" type="danger" style="margin-left: 4px">{{ failCount }} 项查找失败</el-tag>
+        <el-tag v-if="copyDone && copiedCount" type="success" style="margin-left: 4px">已复制 {{ copiedCount }}</el-tag>
+        <el-tag v-if="copyDone && failedCount" type="danger" style="margin-left: 4px">失败 {{ failedCount }}</el-tag>
+      </template>
+      <el-table :data="plan" max-height="400" size="small" border>
+        <el-table-column prop="task_id" label="任务ID" width="120" />
+        <el-table-column prop="doc_type" label="分类" width="80" />
+        <el-table-column label="状态" width="90">
+          <template #default="{ row }">
+            <el-tag
+              v-if="row.copy_status"
+              :type="row.copy_status === '已复制' ? 'success' : row.copy_status === '用户跳过' ? 'info' : 'danger'"
+              size="small"
+            >{{ row.copy_status }}</el-tag>
+            <el-tag v-else :type="row.find_status === '已找到' ? 'success' : 'danger'" size="small">
+              {{ row.find_status }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="大小" width="90">
+          <template #default="{ row }">{{ formatSize(row.file_size) }}</template>
+        </el-table-column>
+        <el-table-column prop="file_mtime" label="修改时间" width="140" />
+        <el-table-column prop="source_path" label="源文件" show-overflow-tooltip />
+        <el-table-column prop="dest_path" label="目标路径" show-overflow-tooltip />
+        <el-table-column prop="error_msg" label="错误" width="150" show-overflow-tooltip />
+      </el-table>
+    </el-card>
+
+    <!-- 规则设置对话框 -->
+    <el-dialog v-model="rulesDialogVisible" title="规则设置" width="900px" destroy-on-close>
+      <el-alert type="info" :closable="false" style="margin-bottom: 12px">
+        <template #title>规则说明</template>
+        <p>规则定义了各类文件的搜索方式。配置一次后通常不需要修改，日常只需添加任务。</p>
+        <p><b>文件名匹配规则</b>：使用通配符模式匹配文件名。</p>
+        <ul style="margin: 4px 0; padding-left: 20px">
+          <li><code>*</code> — 匹配任意字符，如 <code>*发票*</code> 匹配所有文件名含"发票"的文件</li>
+          <li><code>{文件关键词}</code> — 替换为你输入的文件关键词</li>
+          <li><code>{文件分类}</code> — 替换为当前规则分类名（如"发票"、"报关单"）</li>
+          <li>示例：<code>*{文件关键词}*发票*.*</code>，输入关键词"ABC001"后匹配 <code>*ABC001*发票*.*</code></li>
+        </ul>
+        <p><b>搜索路径</b>：使用 <code>{路径关键词}</code> 占位符，扫描时会替换为任务中配置的路径关键词。</p>
+      </el-alert>
+      <SchemaTable
+        v-if="rulesParam"
+        :schema="rulesParam"
+        v-model="formData.rules"
       />
+      <template #footer>
+        <el-button @click="rulesDialogVisible = false">关闭</el-button>
+        <el-button type="primary" @click="saveConfig">保存</el-button>
+      </template>
+    </el-dialog>
 
-      <!-- 复制结果 -->
-      <el-card v-if="copyDone" style="margin-top: 16px">
-        <template #header>
-          <span>复制结果</span>
-          <el-tag type="success" style="margin-left: 8px">成功 {{ copiedCount }}</el-tag>
-          <el-tag v-if="failedCount" type="danger" style="margin-left: 4px">失败 {{ failedCount }}</el-tag>
-          <el-tag v-if="skippedCount" type="info" style="margin-left: 4px">跳过 {{ skippedCount }}</el-tag>
-        </template>
-        <el-table :data="plan" max-height="400" size="small" border>
-          <el-table-column prop="task_id" label="任务ID" width="120" />
-          <el-table-column prop="doc_type" label="分类" width="80" />
-          <el-table-column label="复制状态" width="90">
-            <template #default="{ row }">
-              <el-tag
-                :type="row.copy_status === '已复制' ? 'success' : row.copy_status === '用户跳过' ? 'info' : 'danger'"
-                size="small"
-              >
-                {{ row.copy_status }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="source_path" label="源文件" show-overflow-tooltip />
-          <el-table-column prop="dest_path" label="目标路径" show-overflow-tooltip />
-          <el-table-column prop="error_msg" label="错误" width="150" show-overflow-tooltip />
-        </el-table>
-      </el-card>
-
-      <div style="margin-top: 16px">
-        <el-button @click="currentStep = 2">上一步</el-button>
-        <el-button type="primary" @click="resetAll">重新开始</el-button>
-      </div>
-    </div>
+    <!-- 历史记录对话框 -->
+    <el-dialog v-model="historyDialogVisible" title="执行历史" width="700px" destroy-on-close>
+      <el-table :data="history" size="small" border v-loading="historyLoading">
+        <el-table-column prop="id" label="#" width="60" />
+        <el-table-column label="状态" width="80">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 'success' ? 'success' : 'danger'" size="small">{{ row.status }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="summary" label="结果" show-overflow-tooltip />
+        <el-table-column prop="created_at" label="执行时间" width="170" />
+      </el-table>
+      <el-empty v-if="!history.length && !historyLoading" description="暂无执行记录" />
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { pluginApi } from '@/api'
 import { ElMessage } from 'element-plus'
@@ -198,22 +188,27 @@ const route = useRoute()
 const pluginName = computed(() => route.path.replace('/plugin/', ''))
 
 const pluginInfo = ref<any>({})
-const formData = ref<any>({})
+const formData = ref<any>({ tasks: [], rules: [] })
 const plan = ref<any[]>([])
 const running = ref(false)
 const progress = ref({ percent: 0, message: '' })
-const currentStep = ref(0)
 const copyDone = ref(false)
 
-// 从pluginInfo中提取tasks和rules的schema
+// 对话框
+const rulesDialogVisible = ref(false)
+const historyDialogVisible = ref(false)
+const history = ref<any[]>([])
+const historyLoading = ref(false)
+
+// schema
 const tasksParam = computed(() => pluginInfo.value.params?.find((p: any) => p.name === 'tasks'))
 const rulesParam = computed(() => pluginInfo.value.params?.find((p: any) => p.name === 'rules'))
 
+// 统计
 const foundCount = computed(() => plan.value.filter(r => r.find_status === '已找到').length)
 const failCount = computed(() => plan.value.filter(r => r.find_status === '查找失败').length)
 const copiedCount = computed(() => plan.value.filter(r => r.copy_status === '已复制').length)
 const failedCount = computed(() => plan.value.filter(r => r.copy_status === '复制失败').length)
-const skippedCount = computed(() => plan.value.filter(r => r.copy_status === '用户跳过').length)
 
 function formatSize(bytes: number): string {
   if (!bytes) return ''
@@ -222,17 +217,30 @@ function formatSize(bytes: number): string {
   return (bytes / 1024 / 1024).toFixed(1) + ' MB'
 }
 
+// 自动保存
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+watch(formData, () => {
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => saveConfig(), 1000)
+}, { deep: true })
+
+async function saveConfig() {
+  try {
+    await pluginApi.saveConfig(pluginName.value, formData.value)
+  } catch {
+    // 静默失败，不干扰用户
+  }
+}
+
 onMounted(async () => {
   const { data } = await pluginApi.getInfo(pluginName.value)
   pluginInfo.value = data
   const { data: config } = await pluginApi.getConfig(pluginName.value)
   formData.value = config
 
-  // 如果已有配置，根据情况跳到合适步骤
-  if (formData.value.rules?.length && formData.value.tasks?.length) {
-    currentStep.value = 2
-  } else if (formData.value.rules?.length) {
-    currentStep.value = 1
+  // 首次无规则自动弹出模板选择
+  if (!formData.value.rules?.length && pluginInfo.value.templates?.length) {
+    rulesDialogVisible.value = true
   }
 })
 
@@ -243,6 +251,7 @@ async function onLoadTemplate(name: string) {
     if (rules.length) {
       formData.value.rules = rules
       ElMessage.success(`已加载模板「${name}」`)
+      saveConfig()
     }
   } catch (e: any) {
     ElMessage.error(e.response?.data?.detail || '加载失败')
@@ -250,6 +259,14 @@ async function onLoadTemplate(name: string) {
 }
 
 async function onScan() {
+  if (!formData.value.tasks?.length) {
+    ElMessage.warning('请先添加任务')
+    return
+  }
+  if (!formData.value.rules?.length) {
+    ElMessage.warning('请先配置规则')
+    return
+  }
   running.value = true
   progress.value = { percent: 0, message: '扫描中...' }
   plan.value = []
@@ -291,15 +308,54 @@ async function onCopy() {
   }
 }
 
-function resetAll() {
-  currentStep.value = 0
-  plan.value = []
-  copyDone.value = false
+async function loadHistory() {
+  historyLoading.value = true
+  try {
+    const { data } = await pluginApi.getHistory(pluginName.value)
+    history.value = data.history || []
+  } catch {
+    history.value = []
+  } finally {
+    historyLoading.value = false
+  }
 }
+
+// 打开历史时加载数据
+watch(historyDialogVisible, (v) => {
+  if (v) loadHistory()
+})
 </script>
 
 <style scoped>
 .plugin-page {
   max-width: 1100px;
+}
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.page-header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+.rules-summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #606266;
+}
+.action-bar {
+  margin-top: 16px;
+  display: flex;
+  gap: 12px;
 }
 </style>

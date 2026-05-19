@@ -1,22 +1,22 @@
 [
   {
     "doc_type": "需求文档",
-    "search_path": "D:\\项目文件\\{PathKeyword}",
-    "filename_pattern": "*{PrimaryKeyword}*需求*.*",
+    "search_path": "D:\\项目文件\\{路径关键词}",
+    "filename_pattern": "*{文件关键词}*需求*.*",
     "dest_subfolder": "需求文档",
     "enabled": true
   },
   {
     "doc_type": "设计文档",
-    "search_path": "D:\\项目文件\\{PathKeyword}",
-    "filename_pattern": "*{PrimaryKeyword}*设计*.*",
+    "search_path": "D:\\项目文件\\{路径关键词}",
+    "filename_pattern": "*{文件关键词}*设计*.*",
     "dest_subfolder": "设计文档",
     "enabled": true
   },
   {
     "doc_type": "验收报告",
-    "search_path": "D:\\项目文件\\{PathKeyword}",
-    "filename_pattern": "*{PrimaryKeyword}*验收*.*",
+    "search_path": "D:\\项目文件\\{路径关键词}",
+    "filename_pattern": "*{文件关键词}*验收*.*",
     "dest_subfolder": "验收报告",
     "enabled": true
   }

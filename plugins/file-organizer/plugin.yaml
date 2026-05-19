@@ -59,20 +59,23 @@ params:
         required: true
         width: 100
       - name: "search_path"
-        label: "源文件搜索路径"
+        label: "搜索路径"
         type: "path"
         required: true
-        placeholder: "支持{PathKeyword}占位符"
+        placeholder: "如 /data/files/{路径关键词}"
+        help: "文件所在的搜索路径。用{路径关键词}作为占位符，扫描时替换为任务中配置的路径关键词"
         width: 280
       - name: "filename_pattern"
-        label: "文件名模式"
+        label: "文件名匹配"
         type: "text"
         required: true
-        placeholder: "如 *{PrimaryKeyword}*发票*.*"
+        placeholder: "如 *{文件关键词}*发票*.*"
+        help: "用通配符匹配文件名：*匹配任意字符，{文件关键词}替换为任务中的文件关键词，{文件分类}替换为当前分类名"
         width: 200
       - name: "dest_subfolder"
         label: "目标子文件夹"
         type: "text"
+        placeholder: "留空则放在任务ID目录下"
         width: 120
       - name: "enabled"
         label: "是否启用"

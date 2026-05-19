@@ -1,22 +1,22 @@
 [
   {
     "doc_type": "合同",
-    "search_path": "D:\\合同文件\\{PathKeyword}",
-    "filename_pattern": "*{PrimaryKeyword}*合同*.*",
+    "search_path": "D:\\合同文件\\{路径关键词}",
+    "filename_pattern": "*{文件关键词}*合同*.*",
     "dest_subfolder": "合同",
     "enabled": true
   },
   {
     "doc_type": "附件",
-    "search_path": "D:\\合同文件\\{PathKeyword}",
-    "filename_pattern": "*{PrimaryKeyword}*附件*.*",
+    "search_path": "D:\\合同文件\\{路径关键词}",
+    "filename_pattern": "*{文件关键词}*附件*.*",
     "dest_subfolder": "附件",
     "enabled": true
   },
   {
     "doc_type": "发票",
-    "search_path": "D:\\财务发票\\{PathKeyword}",
-    "filename_pattern": "*{PrimaryKeyword}*发票*.*",
+    "search_path": "D:\\财务发票\\{路径关键词}",
+    "filename_pattern": "*{文件关键词}*发票*.*",
     "dest_subfolder": "发票",
     "enabled": true
   }
