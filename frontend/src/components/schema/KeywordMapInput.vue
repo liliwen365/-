@@ -58,22 +58,33 @@
     <template v-if="mode === 'text'">
       <div class="usage-tip">
         <el-icon><InfoFilled /></el-icon>
-        <span>直接粘贴或编辑关键字文本。<b>格式：</b>分类:关键词1,关键词2;分类:关键词。<b>示例：</b><code>采购合同:.;销售合同:.;发票:26432000000695401411;报关单:报关单</code>。输入<b>.</b>匹配所有文件。多个关键词用逗号分隔。</span>
+        <span>直接粘贴或编辑关键字文本，方便批量设置。</span>
+      </div>
+      <div class="format-help">
+        <p><b>格式：</b><code>分类:路径关键词|文件关键词</code>，多个分类用分号 <code>;</code> 分隔，多个关键词用逗号 <code>,</code> 分隔</p>
+        <p><b>路径关键词</b>（|前面）用于替换搜索路径中的占位符；<b>文件关键词</b>（|后面）用于匹配文件名</p>
+        <p>若只写关键词不加|，则默认为<b>文件关键词</b>（兼容旧格式）</p>
+        <p><b>示例：</b></p>
+        <pre class="format-example">采购合同:.|.
+发票:202603批次|26432000000695401411
+报关单:202603批次|报关单
+销售合同:.|.</pre>
       </div>
       <el-input
         :model-value="compactText"
         @update:model-value="onCompactTextChange"
         type="textarea"
         :rows="6"
-        placeholder="采购合同:.;销售合同:.;发票:26432000000695401411;报关单:报关单"
+        placeholder="采购合同:.|.&#10;发票:202603批次|26432000000695401411&#10;报关单:202603批次|报关单"
       />
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { InfoFilled } from '@element-plus/icons-vue'
+import { parseCompact, serializeCompact } from './keywordUtils'
 
 const props = defineProps<{
   modelValue: Record<string, { path: string[]; file: string[] }>
@@ -83,44 +94,7 @@ const emit = defineEmits(['update:modelValue'])
 
 const mode = ref<'visual' | 'text'>('visual')
 
-// 紧凑格式 → keyword-map dict
-// 格式: 分类:关键词1,关键词2;分类:关键词
-// 关键词只填入 file 数组（兼容旧Excel格式）
-function parseCompact(text: string): Record<string, { path: string[]; file: string[] }> {
-  const result: Record<string, { path: string[]; file: string[] }> = {}
-  if (!text.trim()) return result
-  const pairs = text.split(';').filter(s => s.trim())
-  for (const pair of pairs) {
-    const colonIdx = pair.indexOf(':')
-    if (colonIdx < 0) continue
-    const dt = pair.substring(0, colonIdx).trim()
-    const kwStr = pair.substring(colonIdx + 1).trim()
-    if (!dt) continue
-    const fileKws = kwStr ? kwStr.split(',').map(k => k.trim()).filter(k => k) : []
-    result[dt] = { path: [], file: fileKws }
-  }
-  return result
-}
-
-// keyword-map dict → 紧凑格式
-function serializeCompact(data: Record<string, { path: string[]; file: string[] }>): string {
-  const parts: string[] = []
-  // 按 docTypes 顺序输出，保持一致性
-  const orderedKeys = props.docTypes.length
-    ? props.docTypes.filter(dt => data[dt])
-    : Object.keys(data)
-  for (const dt of orderedKeys) {
-    const entry = data[dt]
-    if (!entry) continue
-    const allKws = [...(entry.path || []), ...(entry.file || [])]
-    if (allKws.length) {
-      parts.push(`${dt}:${allKws.join(',')}`)
-    }
-  }
-  return parts.join(';')
-}
-
-const compactText = computed(() => serializeCompact(props.modelValue || {}))
+const compactText = computed(() => serializeCompact(props.modelValue || {}, props.docTypes))
 
 function onCompactTextChange(text: string) {
   const parsed = parseCompact(text)
@@ -201,11 +175,32 @@ function setKeywords(dt: string, field: 'path' | 'file', val: string[]) {
 .usage-tip span {
   color: #606266;
 }
-.usage-tip code {
-  background: #e8f4e8;
+.format-help {
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: #606266;
+  line-height: 1.6;
+}
+.format-help p {
+  margin: 3px 0;
+}
+.format-help code {
+  background: #f5f7fa;
   padding: 1px 4px;
   border-radius: 2px;
   font-size: 11px;
   color: #333;
+}
+.format-example {
+  background: #f5f7fa;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #303133;
+  line-height: 1.6;
+  margin: 4px 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-wrap: break-word;
 }
 </style>

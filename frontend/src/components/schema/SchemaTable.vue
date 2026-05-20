@@ -61,7 +61,7 @@
     <el-dialog v-model="bulkKeywordVisible" title="批量设置关键词" width="560px" destroy-on-close>
       <div class="usage-tip">
         <el-icon><InfoFilled /></el-icon>
-        <span>配置的关键词将<b>覆盖</b>所有选中行的关键词设置。可在「文本模式」中直接粘贴，如：<code>采购合同:.;销售合同:.;发票:26432000000695401411</code></span>
+        <span>配置的关键词将<b>覆盖</b>所有选中行的关键词设置。可在「文本模式」中直接粘贴，如：<code>采购合同:.|.;;发票:202603批次|26432000000695401411</code></span>
       </div>
       <KeywordMapInput
         v-model="bulkKeywordValue"
@@ -80,15 +80,13 @@
         <p><b>格式要求：</b>每行一个任务，列之间用Tab分隔。</p>
         <ul style="margin: 4px 0; padding-left: 20px">
           <li>第1列=任务ID，第2列=目标存放路径</li>
-          <li>第3列（可选）=关键字配置，格式：<code>分类:关键词;分类:关键词</code></li>
+          <li>第3列（可选）=关键字配置，格式：<code>分类:路径关键词|文件关键词</code></li>
         </ul>
+        <p><b>关键字格式说明：</b><code>|</code> 前为路径关键词，<code>|</code> 后为文件关键词。不加 <code>|</code> 则默认为文件关键词。多个分类用 <code>;</code> 分隔，多个关键词用 <code>,</code> 分隔。<code>.</code> 匹配所有。</p>
         <p><b>示例（2列，无关键字）：</b></p>
-        <pre class="import-example">CG-MLG-202603090011	D:\出口退税\202603批次\出口退税资料
-CG-DX-202602100009	D:\出口退税\202603批次\出口退税资料</pre>
-        <p><b>示例（3列，含关键字）：</b></p>
-        <pre class="import-example">CG-MLG-202603090011	D:\出口退税\202603批次\出口退税资料	采购合同:.;销售合同:.;发票:26432000000695401411;报关单:报关单
-CG-DX-202602100009	D:\出口退税\202603批次\出口退税资料	采购合同:.;销售合同:.;发票:26432000000695401412;报关单:报关单</pre>
-        <p style="color: #909399; font-size: 12px">提示：第3列关键字格式与Excel中一致，多个分类用分号分隔，分类名和关键词用冒号分隔。多个关键词用逗号分隔。输入 . 匹配所有文件。</p>
+        <pre class="import-example">CG-MLG-202603090011	D:\出口退税\202603批次\出口退税资料</pre>
+        <p><b>示例（3列，含路径+文件关键词）：</b></p>
+        <pre class="import-example">CG-MLG-202603090011	D:\出口退税\202603批次\出口退税资料	采购合同:.|.;;发票:202603批次|26432000000695401411;报关单:202603批次|报关单;销售合同:.|.</pre>
       </div>
       <el-input
         v-model="batchText"
@@ -109,6 +107,7 @@ import { ref, computed } from 'vue'
 import { QuestionFilled, InfoFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import KeywordMapInput from './KeywordMapInput.vue'
+import { parseCompact } from './keywordUtils'
 
 const props = defineProps<{
   schema: any
@@ -135,23 +134,6 @@ const kwColName = computed(() => {
   }
   return ''
 })
-
-// 紧凑格式 → keyword-map dict
-function parseCompact(text: string): Record<string, { path: string[]; file: string[] }> {
-  const result: Record<string, { path: string[]; file: string[] }> = {}
-  if (!text.trim()) return result
-  const pairs = text.split(';').filter(s => s.trim())
-  for (const pair of pairs) {
-    const colonIdx = pair.indexOf(':')
-    if (colonIdx < 0) continue
-    const dt = pair.substring(0, colonIdx).trim()
-    const kwStr = pair.substring(colonIdx + 1).trim()
-    if (!dt) continue
-    const fileKws = kwStr ? kwStr.split(',').map(k => k.trim()).filter(k => k) : []
-    result[dt] = { path: [], file: fileKws }
-  }
-  return result
-}
 
 function keywordCount(keywords: any, dt: string): number {
   if (!keywords || !keywords[dt]) return 0
@@ -223,7 +205,6 @@ const bulkKeywordValue = ref<Record<string, { path: string[]; file: string[] }>>
 
 function openBulkKeywordDialog() {
   if (!selected.value.length || !kwColName.value) return
-  // 尝试取第一行的关键字作为初始值（方便复用已有配置）
   const firstRow = selected.value[0]
   const current = firstRow[kwColName.value] || {}
   bulkKeywordValue.value = JSON.parse(JSON.stringify(current))
@@ -329,6 +310,13 @@ function doBatchImport() {
   margin: 4px 0;
   font-size: 13px;
   color: #606266;
+}
+.import-help code {
+  background: #f5f7fa;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-size: 11px;
+  color: #333;
 }
 .import-example {
   background: #f5f7fa;
