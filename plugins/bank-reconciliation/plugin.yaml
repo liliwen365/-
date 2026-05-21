@@ -17,9 +17,9 @@ features:
 
 params:
   - name: "bank_file"
-    type: "text"
-    label: "银行流水文件路径"
-    help: "从网银下载的Excel/CSV流水文件路径"
+    type: "file"
+    label: "银行流水文件"
+    help: "从网银下载的Excel/CSV流水文件"
     required: true
 
   - name: "bank_name"

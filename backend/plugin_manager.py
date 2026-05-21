@@ -93,10 +93,24 @@ class PluginManager:
         module_path, class_name = entry.split(":", 1)
 
         import sys
+        import importlib.util
+        # 清理其他插件目录缓存的模块（避免engine.py等同名模块冲突）
+        stale = [k for k, v in sys.modules.items()
+                 if hasattr(v, '__file__') and v.__file__
+                 and '/plugins/' in v.__file__ and plugin_dir not in v.__file__]
+        for k in stale:
+            sys.modules.pop(k, None)
+        # 确保插件内部import优先找到插件目录
         if plugin_dir not in sys.path:
             sys.path.insert(0, plugin_dir)
-
-        module = importlib.import_module(module_path)
+        # 精确加载插件模块，避免与项目根目录同名模块冲突（如main.py）
+        module_file = os.path.join(plugin_dir, f"{module_path}.py")
+        spec = importlib.util.spec_from_file_location(
+            f"_plugin_{name}.{module_path}", module_file,
+        )
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
         plugin_class = getattr(module, class_name)
 
         instance = plugin_class()

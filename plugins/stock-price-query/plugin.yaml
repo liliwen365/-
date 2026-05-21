@@ -1,0 +1,36 @@
+name: "stock-price-query"
+version: "0.1.0"
+display_name: "股票行情查询"
+description: "查询A股实时行情，支持批量查询、涨跌统计和结果导出"
+category: "finance"
+icon: "📈"
+color: "#E6A23C"
+author: "LocalAgent"
+
+entry: "main:StockPricePlugin"
+
+features:
+  - id: "query"
+    display_name: "行情查询"
+    description: "输入股票代码，查询实时行情"
+    icon: "TrendCharts"
+
+params:
+  - name: "stocks"
+    type: "table"
+    label: "股票代码"
+    help: "输入股票代码，如 sh600519（上证）或 sz000001（深证）"
+    columns:
+      - name: "code"
+        label: "股票代码"
+        type: "text"
+        required: true
+        placeholder: "如 sh600519"
+        width: 160
+      - name: "name"
+        label: "备注"
+        type: "text"
+        placeholder: "可选备注名"
+        width: 160
+
+templates: []

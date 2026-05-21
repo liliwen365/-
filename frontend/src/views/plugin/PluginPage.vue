@@ -54,7 +54,7 @@
       <el-button link size="small" @click="rulesDialogVisible = true" style="margin-left: 8px">修改</el-button>
     </div>
 
-    <!-- Form params (text, select) -->
+    <!-- Form params (text, select, file) -->
     <el-card v-if="formParams.length" style="margin-top: 16px">
       <el-form label-position="right" label-width="auto" size="default">
         <el-row :gutter="16">
@@ -64,6 +64,19 @@
               <el-select v-else-if="param.type === 'select'" v-model="formData[param.name]" style="width: 100%">
                 <el-option v-for="opt in param.options" :key="opt" :label="opt" :value="opt" />
               </el-select>
+              <div v-else-if="param.type === 'file'" style="display: flex; gap: 8px; width: 100%">
+                <el-input v-model="formData[param.name]" :placeholder="param.help || '文件路径'" />
+                <el-upload
+                  :auto-upload="true"
+                  :show-file-list="false"
+                  :action="`/api/plugins/upload?token=${apiToken}`"
+                  :on-success="(res: any) => formData[param.name] = res.path"
+                  :on-error="() => ElMessage.error('上传失败')"
+                  accept=".xlsx,.xls,.csv,.pdf,.doc,.docx"
+                >
+                  <el-button size="small">选择文件</el-button>
+                </el-upload>
+              </div>
             </el-form-item>
           </el-col>
         </el-row>
@@ -242,6 +255,65 @@
           </el-table>
         </el-card>
       </template>
+
+      <!-- Stock price results -->
+      <template v-if="isStockPrice && resultData.data">
+        <el-row :gutter="12" style="margin-bottom: 16px">
+          <el-col :span="6"><el-statistic title="查询总数" :value="resultData.data.summary?.total || 0" suffix="只" /></el-col>
+          <el-col :span="6"><el-statistic title="上涨" :value="resultData.data.summary?.up || 0">
+            <template #suffix><span style="color: #f56c6c">只</span></template>
+          </el-statistic></el-col>
+          <el-col :span="6"><el-statistic title="下跌" :value="resultData.data.summary?.down || 0">
+            <template #suffix><span style="color: #67c23a">只</span></template>
+          </el-statistic></el-col>
+          <el-col :span="6"><el-statistic title="异常" :value="resultData.data.summary?.errors || 0" suffix="只" /></el-col>
+        </el-row>
+
+        <el-card v-if="resultData.data.rows?.length">
+          <el-table :data="resultData.data.rows" size="small" border max-height="400">
+            <el-table-column prop="code" label="代码" width="120" />
+            <el-table-column prop="name" label="名称" width="100" />
+            <el-table-column prop="remark" label="备注" width="100" show-overflow-tooltip />
+            <el-table-column label="最新价" width="100">
+              <template #default="{ row }">
+                <span :style="{color: row.change > 0 ? '#f56c6c' : row.change < 0 ? '#67c23a' : '#333'}">
+                  {{ row.current?.toFixed(2) || '-' }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="涨跌额" width="90">
+              <template #default="{ row }">
+                <span :style="{color: row.change > 0 ? '#f56c6c' : row.change < 0 ? '#67c23a' : '#333'}">
+                  {{ row.change > 0 ? '+' : '' }}{{ row.change?.toFixed(2) }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="涨跌幅" width="90">
+              <template #default="{ row }">
+                <el-tag :type="row.change_pct > 0 ? 'danger' : row.change_pct < 0 ? 'success' : 'info'" size="small">
+                  {{ row.change_pct > 0 ? '+' : '' }}{{ row.change_pct }}%
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="open" label="今开" width="90">
+              <template #default="{ row }">{{ row.open?.toFixed(2) }}</template>
+            </el-table-column>
+            <el-table-column prop="high" label="最高" width="90">
+              <template #default="{ row }">{{ row.high?.toFixed(2) }}</template>
+            </el-table-column>
+            <el-table-column prop="low" label="最低" width="90">
+              <template #default="{ row }">{{ row.low?.toFixed(2) }}</template>
+            </el-table-column>
+            <el-table-column label="成交量" width="100">
+              <template #default="{ row }">{{ row.volume ? (row.volume / 10000).toFixed(0) + '万' : '-' }}</template>
+            </el-table-column>
+            <el-table-column prop="error" label="错误" width="150" show-overflow-tooltip />
+          </el-table>
+          <div style="margin-top: 8px; color: #909399; font-size: 12px">
+            数据来源：新浪财经 | 查询时间：{{ resultData.data.rows?.[0]?.date }} {{ resultData.data.rows?.[0]?.time }}
+          </div>
+        </el-card>
+      </template>
     </div>
 
     <!-- File-organizer: rules dialog -->
@@ -290,6 +362,7 @@ import SchemaTable from '@/components/schema/SchemaTable.vue'
 
 const route = useRoute()
 const pluginName = computed(() => route.path.replace('/plugin/', ''))
+const apiToken = computed(() => localStorage.getItem('api_token') || '')
 
 const pluginInfo = ref<any>({})
 const formData = ref<any>({})
@@ -311,6 +384,7 @@ const currentTaskId = ref<number | null>(null)
 // Computed
 const isFileOrganizer = computed(() => pluginName.value === 'file-organizer')
 const isBankReconciliation = computed(() => pluginName.value === 'bank-reconciliation')
+const isStockPrice = computed(() => pluginName.value === 'stock-price-query')
 
 const formParams = computed(() =>
   pluginInfo.value.params?.filter((p: any) => p.type !== 'table') || []

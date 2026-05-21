@@ -2,10 +2,11 @@
 """插件API路由 — 异步执行 + 状态查询。"""
 import json
 import os
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel
 
 from backend.app import plugin_manager, ws_manager
+from backend.config import settings
 from backend.database import SessionLocal, TaskHistoryModel, SettingModel
 from backend.logger import logger
 from backend.task_runner import TaskRunner
@@ -22,6 +23,23 @@ class ExecuteRequest(BaseModel):
 
 class ConfigUpdate(BaseModel):
     config: dict
+
+
+# --- 文件上传 ---
+
+@router.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
+    """上传文件到临时目录，返回本地文件路径。"""
+    import uuid
+    upload_dir = os.path.join(settings.DATA_DIR, "uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+    ext = os.path.splitext(file.filename or "")[1]
+    filename = f"{uuid.uuid4().hex}{ext}"
+    dest = os.path.join(upload_dir, filename)
+    with open(dest, "wb") as f:
+        while chunk := await file.read(1024 * 64):
+            f.write(chunk)
+    return {"path": dest, "filename": file.filename}
 
 
 # --- 插件列表与详情 ---
