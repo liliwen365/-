@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import MainLayout from '@/layouts/MainLayout.vue'
-import axios from 'axios'
+import api from '@/api'
 import { ElMessage } from 'element-plus'
 
 const staticRoutes: RouteRecordRaw[] = [
@@ -12,6 +12,7 @@ const staticRoutes: RouteRecordRaw[] = [
     children: [
       { path: 'dashboard', name: 'Dashboard', component: () => import('@/views/dashboard/index.vue'), meta: { title: '仪表板', icon: 'Monitor' } },
       { path: 'plugin-manage', name: 'PluginManage', component: () => import('@/views/plugin-manage/index.vue'), meta: { title: '插件管理', icon: 'Grid' } },
+      { path: 'schedules', name: 'Schedules', component: () => import('@/views/schedules/index.vue'), meta: { title: '定时调度', icon: 'Timer' } },
       { path: 'settings', name: 'Settings', component: () => import('@/views/settings/index.vue'), meta: { title: '设置', icon: 'Setting' } },
     ],
   },
@@ -27,7 +28,7 @@ let dynamicRoutesLoaded = false
 // 动态路由注册：从后端获取已安装插件并注册路由
 export async function setupDynamicRoutes() {
   try {
-    const { data } = await axios.get('/api/plugins/installed')
+    const { data } = await api.get('/api/plugins/installed')
     for (const plugin of data.plugins || []) {
       const route: RouteRecordRaw = {
         path: `/plugin/${plugin.name}`,

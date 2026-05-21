@@ -94,6 +94,14 @@
       >
         <el-icon><CopyDocument /></el-icon> 复制 ({{ foundCount }} 个文件)
       </el-button>
+      <el-button
+        v-if="running"
+        type="danger"
+        size="large"
+        @click="onCancel"
+      >
+        取消
+      </el-button>
     </div>
 
     <!-- 进度条 -->
@@ -292,40 +300,78 @@ async function onScan() {
   progress.value = { percent: 0, message: '扫描中...' }
   plan.value = []
   copyDone.value = false
+  currentTaskId.value = null
   try {
     const { data } = await pluginApi.execute(pluginName.value, { ...formData.value, action: 'scan' })
-    if (data.status === 'success') {
-      plan.value = data.data?.plan || []
-      if (data.data?.tasks) {
-        formData.value.tasks = data.data.tasks
-      }
-      ElMessage.success(data.summary)
-    } else {
-      ElMessage.error(data.summary)
-    }
+    currentTaskId.value = data.task_id
+    await pollUntilDone(data.task_id)
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.detail || '扫描失败，请检查任务配置后重试')
-  } finally {
     running.value = false
+    ElMessage.error(e.response?.data?.detail || '扫描失败，请检查任务配置后重试')
   }
 }
 
 async function onCopy() {
   running.value = true
   progress.value = { percent: 0, message: '复制中...' }
+  currentTaskId.value = null
   try {
     const { data } = await pluginApi.execute(pluginName.value, { ...formData.value, action: 'copy', plan: plan.value })
-    if (data.status === 'success') {
-      plan.value = data.data?.plan || plan.value
-      copyDone.value = true
-      ElMessage.success(data.summary)
-    } else {
-      ElMessage.error(data.summary)
-    }
+    currentTaskId.value = data.task_id
+    await pollUntilDone(data.task_id)
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.detail || '复制失败，请检查文件权限后重试')
-  } finally {
     running.value = false
+    ElMessage.error(e.response?.data?.detail || '复制失败，请检查文件权限后重试')
+  }
+}
+
+const currentTaskId = ref<number | null>(null)
+
+async function pollUntilDone(taskId: number) {
+  const maxPolls = 600  // 最多轮询10分钟（每秒一次）
+  for (let i = 0; i < maxPolls; i++) {
+    await new Promise(r => setTimeout(r, 1000))
+    try {
+      const { data } = await pluginApi.getStatus(pluginName.value, taskId)
+      progress.value = {
+        percent: data.progress_percent || 0,
+        message: data.progress_message || '',
+      }
+      if (['success', 'error', 'cancelled'].includes(data.status)) {
+        running.value = false
+        if (data.status === 'success' && data.result) {
+          if (data.result.data?.plan) {
+            plan.value = data.result.data.plan
+          }
+          if (data.result.data?.tasks) {
+            formData.value.tasks = data.result.data.tasks
+          }
+          if (!copyDone.value && data.result.data?.plan?.length) {
+            // 这是扫描结果
+          } else {
+            copyDone.value = true
+          }
+          ElMessage.success(data.result.summary || data.progress_message)
+        } else if (data.status === 'error') {
+          ElMessage.error(data.progress_message || '执行失败')
+        }
+        return
+      }
+    } catch {
+      // 轮询失败继续
+    }
+  }
+  running.value = false
+  ElMessage.warning('执行超时，请查看历史记录')
+}
+
+async function onCancel() {
+  if (!currentTaskId.value) return
+  try {
+    await pluginApi.cancel(pluginName.value, currentTaskId.value)
+    ElMessage.info('已发送取消请求')
+  } catch (e: any) {
+    ElMessage.error('取消失败')
   }
 }
 

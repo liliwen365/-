@@ -1,16 +1,19 @@
 # -*- coding: utf-8 -*-
-"""插件基类 - 所有插件必须继承。"""
-from abc import ABC, abstractmethod
-from typing import Any, Callable, Optional
+"""插件基类 — 便利抽象，内部用hookimpl注册到pluggy。"""
+from typing import Callable, Optional
+
+from backend.plugin_sdk import hookimpl
 
 
-class BasePlugin(ABC):
-    """插件基类。每个插件目录需包含plugin.yaml和实现此基类的Python类。"""
+class BasePlugin:
+    """插件基类。每个插件目录需包含plugin.yaml和实现此基类的Python类。
+    通过hookimpl自动注册到pluggy钩子系统。"""
 
     plugin_dir: str = ""
     manifest: dict = {}
 
-    def get_info(self) -> dict:
+    @hookimpl
+    def get_plugin_info(self) -> dict:
         return {
             "name": self.manifest.get("name", ""),
             "display_name": self.manifest.get("display_name", ""),
@@ -24,26 +27,19 @@ class BasePlugin(ABC):
             "templates": self.manifest.get("templates", []),
         }
 
-    @abstractmethod
+    @hookimpl
     def validate_params(self, params: dict) -> dict:
-        """校验用户参数，返回清洗后的参数。"""
-        ...
+        return params
 
-    @abstractmethod
+    @hookimpl
     def execute(self, params: dict, progress_callback: Optional[Callable] = None) -> dict:
-        """执行插件核心逻辑。
+        raise NotImplementedError
 
-        Args:
-            params: 用户配置的参数（已校验）
-            progress_callback: callback(current, total, message)
-        Returns:
-            {"status": "success"/"error", "summary": "...", "data": {...}}
-        """
-        ...
-
+    @hookimpl
     def on_load(self):
         pass
 
+    @hookimpl
     def on_unload(self):
         pass
 

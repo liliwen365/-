@@ -35,18 +35,51 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <!-- 任务统计 -->
+    <el-row :gutter="20" style="margin-top: 20px">
+      <el-col :span="6">
+        <el-card shadow="hover">
+          <el-statistic title="总任务数" :value="stats.total_tasks" />
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card shadow="hover">
+          <el-statistic title="今日任务" :value="stats.today_tasks" />
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card shadow="hover">
+          <el-statistic title="成功率">
+            <template #default>{{ stats.success_rate }}%</template>
+          </el-statistic>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card shadow="hover">
+          <el-statistic title="失败任务" :value="stats.failed_count" />
+        </el-card>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { systemApi } from '@/api'
+import api from '@/api'
 import { usePluginStore } from '@/stores/plugin'
 import { useAuthStore } from '@/stores/auth'
 
 const pluginStore = usePluginStore()
 const authStore = useAuthStore()
 const info = ref<any>({})
+const stats = ref<any>({
+  total_tasks: 0,
+  today_tasks: 0,
+  success_rate: 0,
+  failed_count: 0,
+})
 
 function formatPlatform(p: string): string {
   if (!p) return ''
@@ -59,5 +92,12 @@ function formatPlatform(p: string): string {
 onMounted(async () => {
   const { data } = await systemApi.getInfo()
   info.value = data
+
+  try {
+    const { data: s } = await api.get('/api/system/stats')
+    stats.value = s
+  } catch {
+    // 统计加载失败不影响页面
+  }
 })
 </script>

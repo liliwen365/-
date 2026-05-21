@@ -31,3 +31,8 @@ class WebSocketManager:
             "current": current, "total": total, "message": message, "eta": eta,
             "percent": round(current / total * 100, 1) if total > 0 else 0,
         })
+
+    async def send_task_complete(self, plugin: str, task_id: int, status: str, summary: str = ""):
+        await self.broadcast("task_complete", plugin, {
+            "task_id": task_id, "status": status, "summary": summary,
+        })

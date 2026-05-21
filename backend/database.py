@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """SQLite数据库 - SQLAlchemy 2.0。"""
-from sqlalchemy import create_engine, Column, String, Integer, Text, DateTime, Boolean
+from sqlalchemy import create_engine, Column, String, Integer, Float, Text, DateTime, Boolean
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from datetime import datetime, timezone
 
@@ -38,6 +38,10 @@ class TaskHistoryModel(Base):
     status = Column(String, default="pending")
     params_json = Column(Text, default="")
     result_json = Column(Text, default="")
+    progress_percent = Column(Float, default=0)
+    progress_message = Column(String, default="")
+    error_traceback = Column(Text, default="")
+    duration_ms = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     finished_at = Column(DateTime, nullable=True)
 
@@ -47,6 +51,19 @@ class SettingModel(Base):
 
     key = Column(String, primary_key=True)
     value = Column(Text, default="")
+
+
+class ScheduleModel(Base):
+    __tablename__ = "schedules"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    plugin_name = Column(String, nullable=False, index=True)
+    feature_id = Column(String, default="")
+    cron_expr = Column(String, nullable=False)
+    params_json = Column(Text, default="")
+    enabled = Column(Boolean, default=True)
+    last_run_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 def create_tables():

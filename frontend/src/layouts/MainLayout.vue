@@ -27,6 +27,10 @@
           <el-icon><Grid /></el-icon>
           <span>插件管理</span>
         </el-menu-item>
+        <el-menu-item index="/schedules">
+          <el-icon><Timer /></el-icon>
+          <span>定时调度</span>
+        </el-menu-item>
         <el-menu-item index="/settings">
           <el-icon><Setting /></el-icon>
           <span>设置</span>
@@ -54,6 +58,7 @@ import { onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { usePluginStore } from '@/stores/plugin'
 import { useAuthStore } from '@/stores/auth'
+import { Timer } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const pluginStore = usePluginStore()

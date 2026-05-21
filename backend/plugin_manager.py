@@ -1,18 +1,55 @@
 # -*- coding: utf-8 -*-
-"""插件管理器 - 发现/注册/加载/执行。"""
+"""插件管理器 — 发现/注册/加载。基于pluggy钩子系统。"""
 import os
 import importlib
 import yaml
 
-from backend.base_plugin import BasePlugin
+import pluggy
+
+from backend.plugin_sdk import LocalAgentSpec, hookimpl
 from backend.database import SessionLocal, PluginModel
 from backend.logger import logger
 from backend.config import settings
 
 
+class PluginManifest:
+    """持有plugin.yaml元数据的包装对象，支持hookimpl协议。"""
+
+    def __init__(self, manifest: dict, plugin_dir: str):
+        self.manifest = manifest
+        self.plugin_dir = plugin_dir
+
+    def get_info(self) -> dict:
+        return {
+            "name": self.manifest.get("name", ""),
+            "display_name": self.manifest.get("display_name", ""),
+            "version": self.manifest.get("version", "0.0.0"),
+            "description": self.manifest.get("description", ""),
+            "category": self.manifest.get("category", "custom"),
+            "icon": self.manifest.get("icon", ""),
+            "color": self.manifest.get("color", "#2196F3"),
+            "features": self.manifest.get("features", []),
+            "params": self.manifest.get("params", []),
+            "templates": self.manifest.get("templates", []),
+        }
+
+    def get_template(self, template_name: str) -> dict | None:
+        for t in self.manifest.get("templates", []):
+            if t.get("name") == template_name:
+                import json
+                path = os.path.join(self.plugin_dir, t.get("file", ""))
+                if os.path.exists(path):
+                    with open(path, "r", encoding="utf-8") as f:
+                        return json.load(f)
+        return None
+
+
 class PluginManager:
     def __init__(self):
-        self._plugins: dict[str, BasePlugin] = {}
+        self._pm = pluggy.PluginManager("localagent")
+        self._pm.add_hookspecs(LocalAgentSpec)
+        self._plugins: dict[str, object] = {}
+        self._manifests: dict[str, PluginManifest] = {}
 
     def discover_plugins(self):
         """扫描插件目录，发现并加载所有插件。"""
@@ -45,13 +82,16 @@ class PluginManager:
         if name in self._plugins:
             return
 
+        # 保存manifest包装
+        mf = PluginManifest(manifest, plugin_dir)
+        self._manifests[name] = mf
+
         entry = manifest.get("entry", "")
         if ":" not in entry:
             raise ValueError(f"entry 格式错误，应为 'module:ClassName'，实际: {entry}")
 
         module_path, class_name = entry.split(":", 1)
 
-        # 将插件目录加入sys.path以便import
         import sys
         if plugin_dir not in sys.path:
             sys.path.insert(0, plugin_dir)
@@ -59,15 +99,16 @@ class PluginManager:
         module = importlib.import_module(module_path)
         plugin_class = getattr(module, class_name)
 
-        if not issubclass(plugin_class, BasePlugin):
-            raise TypeError(f"{class_name} 未继承 BasePlugin")
-
         instance = plugin_class()
         instance.plugin_dir = plugin_dir
         instance.manifest = manifest
-        instance.on_load()
 
+        # 通过pluggy注册
+        self._pm.register(instance, name=name)
         self._plugins[name] = instance
+
+        # 调用可选的on_load钩子
+        self._pm.hook.on_load(plugin=instance)
 
         # 同步到数据库
         self._register_to_db(manifest)
@@ -92,15 +133,24 @@ class PluginManager:
         finally:
             db.close()
 
-    def get_plugin(self, name: str) -> BasePlugin | None:
+    def get_plugin(self, name: str):
+        """返回插件实例，附带manifest和plugin_dir属性。"""
         return self._plugins.get(name)
 
+    def get_manifest(self, name: str) -> PluginManifest | None:
+        return self._manifests.get(name)
+
     def list_plugins(self) -> list[dict]:
-        return [p.get_info() for p in self._plugins.values()]
+        result = []
+        for name, _ in self._plugins.items():
+            mf = self._manifests.get(name)
+            if mf:
+                result.append(mf.get_info())
+        return result
 
     def cleanup(self):
         for p in self._plugins.values():
             try:
-                p.on_unload()
+                self._pm.hook.on_unload(plugin=p)
             except Exception:
                 pass

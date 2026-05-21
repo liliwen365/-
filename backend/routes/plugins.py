@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""插件API路由。"""
+"""插件API路由 — 异步执行 + 状态查询。"""
 import json
 import os
 from fastapi import APIRouter, HTTPException
@@ -8,8 +8,11 @@ from pydantic import BaseModel
 from backend.app import plugin_manager, ws_manager
 from backend.database import SessionLocal, TaskHistoryModel, SettingModel
 from backend.logger import logger
+from backend.task_runner import TaskRunner
 
 router = APIRouter()
+
+task_runner = TaskRunner(ws_manager=ws_manager)
 
 
 class ExecuteRequest(BaseModel):
@@ -30,10 +33,10 @@ def list_plugins():
 
 @router.get("/{name}/info")
 def plugin_info(name: str):
-    p = plugin_manager.get_plugin(name)
-    if not p:
+    mf = plugin_manager.get_manifest(name)
+    if not mf:
         raise HTTPException(404, f"插件 {name} 未安装")
-    return p.get_info()
+    return mf.get_info()
 
 
 # --- 插件配置 ---
@@ -46,10 +49,9 @@ def get_config(name: str):
         row = db.query(SettingModel).filter(SettingModel.key == key).first()
         if row and row.value:
             return json.loads(row.value)
-        # 返回默认值
-        p = plugin_manager.get_plugin(name)
-        if p:
-            return _default_config(p.get_info())
+        mf = plugin_manager.get_manifest(name)
+        if mf:
+            return _default_config(mf.get_info())
         return {}
     finally:
         db.close()
@@ -76,16 +78,16 @@ def save_config(name: str, body: ConfigUpdate):
 
 @router.get("/{name}/templates/{template}")
 def load_template(name: str, template: str):
-    p = plugin_manager.get_plugin(name)
-    if not p:
+    mf = plugin_manager.get_manifest(name)
+    if not mf:
         raise HTTPException(404, f"插件 {name} 未安装")
-    data = p.get_template(template)
+    data = mf.get_template(template)
     if not data:
         raise HTTPException(404, f"模板 {template} 不存在")
     return data
 
 
-# --- 执行 ---
+# --- 异步执行 ---
 
 @router.post("/{name}/execute")
 async def execute_plugin(name: str, body: ExecuteRequest):
@@ -94,57 +96,31 @@ async def execute_plugin(name: str, body: ExecuteRequest):
         raise HTTPException(404, f"插件 {name} 未安装")
 
     validated = p.validate_params(body.params)
+    params = {**validated, "feature_id": body.feature_id}
 
-    # 记录任务
-    db = SessionLocal()
-    task = TaskHistoryModel(
-        plugin_name=name, feature_id=body.feature_id,
-        status="running", params_json=json.dumps(body.params, ensure_ascii=False),
-    )
-    db.add(task)
-    db.commit()
-    db.refresh(task)
-    task_id = task.id
-    db.close()
-
-    # 进度回调（engine同步调用，4个参数: current, total, message/id, eta）
-    def on_progress(current, total, message="", eta=""):
-        try:
-            import asyncio
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                asyncio.ensure_future(
-                    ws_manager.send_progress(name, current, total, str(message), str(eta))
-                )
-            else:
-                loop.run_until_complete(
-                    ws_manager.send_progress(name, current, total, str(message), str(eta))
-                )
-        except Exception:
-            pass
-
-    # 执行（同步，后续改为子进程）
     try:
-        result = p.execute(validated, progress_callback=on_progress)
-        status = result.get("status", "success")
-        summary = result.get("summary", "")
+        task_id = await task_runner.start(p, params)
     except Exception as e:
-        logger.error(f"插件 {name} 执行异常: {e}")
-        status, summary, result = "error", str(e), {}
+        logger.error(f"启动插件 {name} 执行失败: {e}")
+        raise HTTPException(500, f"启动执行失败: {e}")
 
-    # 更新任务
-    db = SessionLocal()
-    t = db.query(TaskHistoryModel).get(task_id)
-    if t:
-        t.status = status
-        t.result_json = json.dumps(result, ensure_ascii=False)
-        if status != "running":
-            from datetime import datetime, timezone
-            t.finished_at = datetime.now(timezone.utc)
-        db.commit()
-    db.close()
+    return {"task_id": task_id, "status": "pending"}
 
-    return {"task_id": task_id, "status": status, "summary": summary, "result": result}
+
+@router.get("/{name}/status")
+def task_status(name: str, task_id: int):
+    result = task_runner.get_status(task_id)
+    if not result:
+        raise HTTPException(404, f"任务 {task_id} 不存在")
+    return result
+
+
+@router.post("/{name}/cancel")
+async def cancel_task(name: str, task_id: int):
+    cancelled = await task_runner.cancel(task_id)
+    if not cancelled:
+        raise HTTPException(400, f"任务 {task_id} 无法取消（可能已完成）")
+    return {"success": True, "task_id": task_id}
 
 
 # --- 历史记录 ---
@@ -162,8 +138,11 @@ def plugin_history(name: str, limit: int = 20):
         )
         return {"history": [
             {
-                "id": r.id, "status": r.status, "summary": r.result_json[:200] if r.result_json else "",
-                "created_at": str(r.created_at), "finished_at": str(r.finished_at) if r.finished_at else "",
+                "id": r.id, "status": r.status,
+                "summary": r.progress_message or "",
+                "duration_ms": r.duration_ms,
+                "created_at": str(r.created_at),
+                "finished_at": str(r.finished_at) if r.finished_at else "",
             }
             for r in rows
         ]}

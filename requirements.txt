@@ -8,3 +8,6 @@ pyyaml>=6.0
 pandas>=1.5
 pystray>=0.19
 Pillow>=10.0
+alembic>=1.13
+pluggy>=1.5
+apscheduler>=3.10,<4.0

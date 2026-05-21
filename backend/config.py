@@ -2,6 +2,7 @@
 """配置管理 - Pydantic Settings + 环境变量。"""
 import os
 import platform
+import secrets
 from typing import Optional
 
 from pydantic_settings import BaseSettings
@@ -32,6 +33,7 @@ class Settings(BaseSettings):
     DB_PATH: Optional[str] = None
     PLUGINS_DIR: str = ""
     USER_PLUGINS_DIR: str = ""
+    API_TOKEN: str = ""
 
     model_config = {"env_prefix": "LOCAL_AGENT_", "env_file": ".env"}
 
@@ -46,6 +48,17 @@ class Settings(BaseSettings):
             )
         if not self.USER_PLUGINS_DIR:
             self.USER_PLUGINS_DIR = os.path.join(self.DATA_DIR, "user-plugins")
+        self._init_api_token()
+
+    def _init_api_token(self):
+        token_path = os.path.join(self.DATA_DIR, ".api_token")
+        if os.path.exists(token_path):
+            with open(token_path, "r") as f:
+                self.API_TOKEN = f.read().strip()
+        if not self.API_TOKEN:
+            self.API_TOKEN = secrets.token_hex(32)
+            with open(token_path, "w") as f:
+                f.write(self.API_TOKEN)
 
 
 settings = Settings()
