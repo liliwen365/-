@@ -8,19 +8,40 @@ import time
 import traceback
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
+from multiprocessing.managers import SyncManager
 
 from backend.database import SessionLocal, TaskHistoryModel
 from backend.logger import logger
+
+_manager: SyncManager | None = None
+
+def _get_manager() -> SyncManager:
+    global _manager
+    if _manager is None:
+        _manager = multiprocessing.Manager()
+    return _manager
 
 
 def _subprocess_entry(plugin_module_path, plugin_dir, module_name, class_name,
                       params_json, queue, task_id):
     """在子进程中执行插件。模块级函数，可被pickle。"""
+    import importlib.util
     import sys
-    if plugin_dir not in sys.path:
-        sys.path.insert(0, plugin_dir)
+    # 确保backend包可导入（插件可能import backend.capabilities）
+    backend_dir = plugin_module_path
+    if backend_dir not in sys.path:
+        sys.path.insert(0, backend_dir)
+    # plugin_dir在最前面，使插件内部import优先找到插件目录
+    if plugin_dir in sys.path:
+        sys.path.remove(plugin_dir)
+    sys.path.insert(0, plugin_dir)
 
-    module = __import__(module_name)
+    module_file = os.path.join(plugin_dir, f"{module_name}.py")
+    spec = importlib.util.spec_from_file_location(module_name, module_file)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+
     plugin_class = getattr(module, class_name)
     instance = plugin_class()
     instance.plugin_dir = plugin_dir
@@ -50,11 +71,13 @@ class TaskRunner:
         self._active_tasks: dict[int, asyncio.Task] = {}
         self._poll_task: asyncio.Task | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._results: dict[int, str] = {}      # task_id -> result_json
+        self._errors: dict[int, str] = {}       # task_id -> error_traceback
 
     def _ensure_executor(self):
         if self._executor is None:
             self._executor = ProcessPoolExecutor(max_workers=2)
-            self._progress_queue = multiprocessing.Queue()
+            self._progress_queue = _get_manager().Queue()
 
     async def start(self, plugin_instance, params: dict) -> int:
         """异步启动插件执行，立即返回task_id。"""
@@ -116,8 +139,11 @@ class TaskRunner:
             error_tb = None
             try:
                 future.result()
-                # 从队列尾部取结果
-                result_json = self._drain_result(task_id)
+                # 从_results字典取结果（由_poll_progress存入）
+                await asyncio.sleep(0.2)
+                result_json = self._results.pop(task_id, None)
+                if not result_json:
+                    error_tb = self._errors.pop(task_id, None)
             except Exception as e:
                 error_tb = traceback.format_exc()
                 logger.error(f"任务 {task_id} 执行异常: {e}")
@@ -152,20 +178,6 @@ class TaskRunner:
 
         self._active_tasks.pop(task_id, None)
 
-    def _drain_result(self, task_id: int) -> str | None:
-        """从队列中取指定task_id的完成结果。"""
-        result = None
-        while not self._progress_queue.empty():
-            try:
-                tid, cur, total, msg, eta = self._progress_queue.get_nowait()
-                if tid == task_id and msg == "__done__":
-                    result = eta
-                elif tid == task_id and msg == "__error__":
-                    return None
-            except Exception:
-                break
-        return result
-
     async def _poll_progress(self):
         """轮询进度队列并推送WebSocket。"""
         while True:
@@ -175,7 +187,11 @@ class TaskRunner:
                         task_id, current, total, message, eta = (
                             self._progress_queue.get_nowait()
                         )
-                        if message in ("__done__", "__error__"):
+                        if message == "__done__":
+                            self._results[task_id] = eta
+                            continue
+                        if message == "__error__":
+                            self._errors[task_id] = eta
                             continue
                         percent = round(current / total * 100, 1) if total > 0 else 0
                         self._update_task(
