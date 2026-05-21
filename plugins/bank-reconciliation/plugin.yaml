@@ -1,0 +1,95 @@
+name: "bank-reconciliation"
+version: "0.1.0"
+display_name: "银行流水对账"
+description: "导入银行流水和企业日记账，自动匹配生成余额调节表"
+category: "finance"
+icon: "💰"
+color: "#409EFF"
+author: "LocalAgent"
+
+entry: "main:BankReconciliationPlugin"
+
+features:
+  - id: "reconcile"
+    display_name: "银行对账"
+    description: "导入银行流水和日记账，自动匹配"
+    icon: "Document"
+
+params:
+  - name: "bank_file"
+    type: "text"
+    label: "银行流水文件路径"
+    help: "从网银下载的Excel/CSV流水文件路径"
+    required: true
+
+  - name: "bank_name"
+    type: "select"
+    label: "银行名称"
+    options: ["工商银行", "建设银行", "农业银行", "中国银行", "招商银行", "交通银行", "浦发银行", "中信银行", "通用模板"]
+    default: "通用模板"
+    required: true
+
+  - name: "skip_rows"
+    type: "text"
+    label: "跳过前N行"
+    help: "银行流水文件头部非数据行数"
+    default: "0"
+
+  - name: "journal"
+    type: "table"
+    label: "企业日记账"
+    help: "企业银行存款日记账（手动输入或从ERP导出）"
+    columns:
+      - name: "date"
+        label: "日期"
+        type: "text"
+        required: true
+        placeholder: "2026-05-01"
+        width: 110
+      - name: "summary"
+        label: "摘要"
+        type: "text"
+        width: 150
+      - name: "income"
+        label: "收入金额"
+        type: "text"
+        width: 100
+      - name: "expense"
+        label: "支出金额"
+        type: "text"
+        width: 100
+      - name: "balance"
+        label: "余额"
+        type: "text"
+        width: 110
+      - name: "counterparty"
+        label: "对方户名"
+        type: "text"
+        width: 120
+
+  - name: "match_rules"
+    type: "table"
+    label: "匹配规则"
+    help: "匹配规则从上到下依次执行，严格→宽松"
+    columns:
+      - name: "rule_name"
+        label: "规则"
+        type: "select"
+        options: ["精确匹配(日期+金额)", "日期容差+金额匹配", "仅金额匹配"]
+        required: true
+        width: 180
+      - name: "tolerance_days"
+        label: "日期容差(天)"
+        type: "text"
+        default: "3"
+        width: 100
+      - name: "amount_tolerance"
+        label: "金额容差"
+        type: "text"
+        default: "0.01"
+        width: 80
+      - name: "enabled"
+        label: "启用"
+        type: "switch"
+        default: true
+        width: 55
