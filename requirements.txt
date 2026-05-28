@@ -11,3 +11,4 @@ Pillow>=10.0
 alembic>=1.13
 pluggy>=1.5
 apscheduler>=3.10,<4.0
+python-multipart>=0.0.6
