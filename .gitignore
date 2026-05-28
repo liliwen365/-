@@ -9,7 +9,7 @@ build/
 .idea/
 .vscode/
 *.swp
-*.spec
+# *.spec 已移至 build.spec，需要提交打包配置
 
 # 安全 - 不提交私钥和签名工具
 *.pem
