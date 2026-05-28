@@ -247,17 +247,33 @@ def test_file_scanner(r, tmp):
         r.fail("带空格路径", result4.error)
 
 
+def _drive_exists(drive_path):
+    """检测网络驱动器是否可访问（Path.exists() 对映射盘不可靠）。"""
+    import ctypes
+    path = str(drive_path).rstrip("\\/")
+    # 方法1: GetDriveType 检测盘符类型
+    if len(path) == 2 and path[1] == ":":
+        dt = ctypes.windll.kernel32.GetDriveTypeW(path + "\\")
+        if dt > 1:  # 1=不存在, >1=存在(2=可移动,3=固定,4=网络,5=光驱,6=RAM)
+            return True
+    # 方法2: 尝试列举目录
+    try:
+        os.listdir(path + "\\")
+        return True
+    except (FileNotFoundError, PermissionError, OSError):
+        return False
+
+
 def test_nas_connection(r, nas_path):
     """T7: NAS/网络驱动器连接。"""
     print(f"\n[T7] NAS连接测试 ({nas_path})")
 
-    nas = Path(nas_path)
-    if not nas.exists():
+    if not _drive_exists(nas_path):
         r.skip("NAS连接", f"{nas_path} 不存在或不可访问")
         return None
 
     try:
-        items = list(nas.iterdir())
+        items = list(Path(nas_path).iterdir())
         names = [d.name for d in items[:10]]
         r.ok("NAS根目录", f"前10项: {names}")
     except Exception as e:
@@ -271,7 +287,7 @@ def test_nas_scan(r, nas_path):
     """T8: NAS真实文件扫描。"""
     print(f"\n[T8] NAS文件扫描测试 ({nas_path})")
 
-    if not Path(nas_path).exists():
+    if not _drive_exists(nas_path):
         r.skip("NAS扫描", "NAS路径不可用")
         return
 
@@ -329,7 +345,7 @@ def test_full_workflow(r, tmp):
 
         for f in result.files:
             cp = copy_file(f.path, str(task_dest / f.name))
-            if cp.success:
+            if cp.status == "success":
                 all_copied += 1
 
     if all_copied >= 3:
