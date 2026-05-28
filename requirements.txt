@@ -12,3 +12,7 @@ alembic>=1.13
 pluggy>=1.5
 apscheduler>=3.10,<4.0
 python-multipart>=0.0.6
+httpx>=0.24
+pytest>=7.0
+pytest-playwright>=0.8
+pytest-asyncio>=0.23
