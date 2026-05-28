@@ -419,11 +419,12 @@ function formatAmount(val: any): string {
   return n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-// Auto-save
+// Auto-save（跳过初始加载触发的watch）
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let saving = false
+let initialized = false
 watch(formData, () => {
-  if (saving) return
+  if (!initialized || saving) return
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(() => saveConfig(), 1000)
 }, { deep: true })
@@ -445,6 +446,10 @@ onMounted(async () => {
   pluginInfo.value = data
   const { data: config } = await pluginApi.getConfig(pluginName.value)
   formData.value = config
+
+  // 标记初始化完成，后续formData变化才触发自动保存
+  await new Promise(r => setTimeout(r, 0))
+  initialized = true
 
   // File-organizer: auto-open rules dialog on first use
   if (isFileOrganizer.value && !formData.value.rules?.length && pluginInfo.value.templates?.length) {
@@ -494,6 +499,7 @@ async function onCopy() {
     const { data } = await pluginApi.execute(pluginName.value, { ...formData.value, action: 'copy', plan: plan.value })
     currentTaskId.value = data.task_id
     await pollUntilDone(data.task_id)
+    copyDone.value = true
   } catch (e: any) {
     running.value = false
     ElMessage.error(e.response?.data?.detail || '复制失败')
@@ -534,7 +540,6 @@ async function pollUntilDone(taskId: number) {
           if (isFileOrganizer.value) {
             if (data.result.data?.plan) plan.value = data.result.data.plan
             if (data.result.data?.tasks) formData.value.tasks = data.result.data.tasks
-            if (copyDone.value || !data.result.data?.plan?.length) copyDone.value = true
           } else {
             resultData.value = data.result
           }

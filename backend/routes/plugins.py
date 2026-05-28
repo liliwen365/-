@@ -61,27 +61,48 @@ def plugin_info(name: str):
 
 @router.get("/{name}/config")
 def get_config(name: str):
+    mf = plugin_manager.get_manifest(name)
+    if not mf:
+        raise HTTPException(404, f"插件 {name} 未安装")
+
+    param_keys = {p["name"] for p in mf.get_info().get("params", []) if "name" in p}
+    defaults = _default_config(mf.get_info())
+
     db = SessionLocal()
     try:
         key = f"plugin_config_{name}"
         row = db.query(SettingModel).filter(SettingModel.key == key).first()
         if row and row.value:
-            return json.loads(row.value)
-        mf = plugin_manager.get_manifest(name)
-        if mf:
-            return _default_config(mf.get_info())
-        return {}
+            stored = json.loads(row.value)
+            # 只保留属于本插件的字段，缺失的用默认值补齐
+            cleaned = {}
+            for k in param_keys:
+                cleaned[k] = stored.get(k, defaults.get(k, "" if k not in defaults else []))
+            # 如果数据被清理过，回写一次
+            if set(stored.keys()) - param_keys:
+                row.value = json.dumps(cleaned, ensure_ascii=False)
+                db.commit()
+            return cleaned
+        return defaults
     finally:
         db.close()
 
 
 @router.put("/{name}/config")
 def save_config(name: str, body: ConfigUpdate):
+    mf = plugin_manager.get_manifest(name)
+    if not mf:
+        raise HTTPException(404, f"插件 {name} 未安装")
+
+    param_keys = {p["name"] for p in mf.get_info().get("params", []) if "name" in p}
+    # 只保存属于本插件的字段
+    filtered = {k: v for k, v in body.config.items() if k in param_keys}
+
     db = SessionLocal()
     try:
         key = f"plugin_config_{name}"
         row = db.query(SettingModel).filter(SettingModel.key == key).first()
-        value = json.dumps(body.config, ensure_ascii=False)
+        value = json.dumps(filtered, ensure_ascii=False)
         if row:
             row.value = value
         else:

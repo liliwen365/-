@@ -25,6 +25,14 @@ def _scan_one_task(task_row, active_rules):
         keywords = json.loads(keywords) if keywords else {}
     override_path = task_row.get('override_path')
 
+    # 提取 _default 组的路径关键词（兼容原始脚本"不带冒号"写法）
+    default_path_kw = []
+    default_group = keywords.get('_default', {})
+    if isinstance(default_group, dict):
+        default_path_kw = default_group.get('path', [])
+    elif isinstance(default_group, str):
+        default_path_kw = [default_group]
+
     plan_records = []
 
     for _, rule_row in active_rules.iterrows():
@@ -37,7 +45,8 @@ def _scan_one_task(task_row, active_rules):
             type_keywords = json.loads(type_keywords)
 
         file_kw_list = type_keywords.get('file', [])
-        path_kw_list = type_keywords.get('path', [])
+        # 优先用当前分类的路径关键词，无则回退到 _default 组
+        path_kw_list = type_keywords.get('path', []) or default_path_kw
 
         if not file_kw_list:
             continue

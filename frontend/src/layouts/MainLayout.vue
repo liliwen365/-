@@ -47,7 +47,7 @@
         </div>
       </el-header>
       <el-main class="main-content">
-        <router-view />
+        <router-view :key="route.path" />
       </el-main>
     </el-container>
   </el-container>

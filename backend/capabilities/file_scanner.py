@@ -32,7 +32,7 @@ def scan_directory(search_paths_str, filename_pattern,
 
     Args:
         search_paths_str: 分号分隔的搜索路径（支持 glob 通配符）
-        filename_pattern: fnmatch 文件名模式
+        filename_pattern: fnmatch 文件名模式，支持分号分隔的多个模式
         path_builder: 可选，对每个展开路径做进一步替换
         pattern_builder: 可选，对文件名模式做进一步替换
 
@@ -47,8 +47,12 @@ def scan_directory(search_paths_str, filename_pattern,
         for p in (glob.glob(pattern) if any(c in pattern for c in '*?[') else [pattern])
     ]
 
+    # 支持分号分隔的多个文件名模式
+    raw_patterns = [p.strip() for p in str(filename_pattern).split(';') if p.strip()]
     if pattern_builder:
-        filename_pattern = pattern_builder(filename_pattern)
+        final_patterns = [pattern_builder(p) for p in raw_patterns]
+    else:
+        final_patterns = raw_patterns
 
     all_files = []
     for base_path in expanded:
@@ -58,7 +62,7 @@ def scan_directory(search_paths_str, filename_pattern,
             continue
         for root, _, files in os.walk(base_path):
             for name in files:
-                if fnmatch.fnmatch(name, filename_pattern):
+                if any(fnmatch.fnmatch(name, pat) for pat in final_patterns):
                     fpath = os.path.join(root, name)
                     try:
                         import datetime
