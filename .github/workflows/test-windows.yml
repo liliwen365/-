@@ -23,43 +23,65 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pytest pytest-playwright pytest-asyncio
 
-    - name: Install Playwright browsers
-      run: playwright install chromium
-
-    - name: Create test files with Chinese names
-      run: |
-        mkdir test_files_win
-        mkdir test_files_win\source
-        "测试内容" | Out-File -Encoding UTF8 test_files_win\source\ABC001发票.pdf
-        "报关单内容" | Out-File -Encoding UTF8 test_files_win\source\ABC001报关单.pdf
-
-    - name: Run unit tests
+    - name: Run unit & integration tests
       run: pytest tests/ -v --tb=short
 
-    - name: Run Windows compatibility tests
-      run: pytest tests/test_windows_compatibility.py -v --tb=short
-
     - name: Test file scanner with Windows paths
+      shell: bash
       run: |
-        $python -c "
+        mkdir -p test_files_win/source
+        echo "test content" > "test_files_win/source/ABC001发票.pdf"
+        echo "test content" > "test_files_win/source/ABC001报关单.pdf"
+        python -c "
+        import sys, os
+        sys.path.insert(0, '.')
         from backend.capabilities.file_scanner import scan_directory
-        result = scan_directory('test_files_win\source', '*.pdf')
+        result = scan_directory('test_files_win/source', '*.pdf')
         print(f'Found {len(result.files)} files')
         assert result.error is None, f'Scan failed: {result.error}'
         assert len(result.files) >= 2, f'Expected at least 2 files, got {len(result.files)}'
-        print('✓ Windows path test passed')
+        print('Windows path scan test passed')
         "
 
-    - name: Test UNC path simulation
+    - name: Test path utilities on Windows
+      shell: bash
       run: |
-        # 模拟UNC路径场景
-        $python -c "
-        from pathlib import Path, PureWindowsPath
-        # 测试路径解析
-        unc_path = PureWindowsPath(r'\\Server\Share\报关单\2026年')
-        print(f'UNC path parts: {unc_path.parts}')
-        assert 'Share' in unc_path.parts
-        print('✓ UNC path parsing passed')
+        python -c "
+        import sys
+        sys.path.insert(0, '.')
+        from backend.utils.path_utils import PathUtils
+        from pathlib import PureWindowsPath
+
+        # UNC path detection
+        assert PathUtils.is_windows_unc_path(r'\\\\NAS-Server\\\\Share')
+        assert PathUtils.is_windows_unc_path('//NAS-Server/Share')
+
+        # Drive path detection
+        assert PathUtils.is_windows_drive_path(r'Y:\\报关单')
+        assert PathUtils.is_windows_drive_path('C:\\Users')
+
+        # Path type identification
+        assert 'UNC' in PathUtils.get_path_type(r'\\\\Server\\\\Share')
+        assert '盘符' in PathUtils.get_path_type('Y:\\data')
+
+        print('Path utilities test passed')
+        "
+
+    - name: Test template engine
+      shell: bash
+      run: |
+        python -c "
+        import sys
+        sys.path.insert(0, '.')
+        from backend.capabilities.template_engine import build_path, build_filename_pattern
+
+        # Path template with override
+        assert build_path('Y:\\\\data\\\\{PathKeyword}', 'ABC001', override='') == 'Y:\\\\data\\\\ABC001'
+        assert build_path('Y:\\\\data\\\\{PathKeyword}', 'ABC001', override='D:\\\\other') == 'D:\\\\other'
+
+        # Filename pattern
+        pat = build_filename_pattern('*{PrimaryKeyword}*发票*.*', 'ABC', '发票')
+        assert 'ABC' in pat
+        print('Template engine test passed')
         "
