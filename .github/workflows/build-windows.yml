@@ -31,10 +31,11 @@ jobs:
         pip install pyinstaller
 
     - name: Build frontend
+      shell: bash
       run: |
         cd frontend
         npm install
-        npm run build
+        npx vite build
 
     - name: Build exe with PyInstaller
       run: pyinstaller build.spec --clean --noconfirm
