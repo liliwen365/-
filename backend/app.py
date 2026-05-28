@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """FastAPI应用创建与配置。"""
+
 import os
 from contextlib import asynccontextmanager
 
@@ -23,15 +24,18 @@ async def lifespan(app: FastAPI):
     plugin_manager.discover_plugins()
 
     from backend.scheduler import app_scheduler
+
     app_scheduler.start()
     await _restore_schedules()
 
     yield
 
     from backend.scheduler import app_scheduler as sched
+
     sched.shutdown()
     plugin_manager.cleanup()
     from backend.routes.plugins import task_runner
+
     task_runner.shutdown()
 
 
@@ -52,6 +56,7 @@ async def _restore_schedules():
                 )
             except Exception as e:
                 from backend.logger import logger
+
                 logger.error(f"恢复调度 schedule_{r.id} 失败: {e}")
     finally:
         db.close()
@@ -79,14 +84,23 @@ def create_app() -> FastAPI:
     async def token_auth(request: Request, call_next):
         path = request.url.path
         # 不需要认证的路径
-        if path.startswith("/docs") or path.startswith("/redoc") or path == "/openapi.json":
+        if (
+            path.startswith("/docs")
+            or path.startswith("/redoc")
+            or path == "/openapi.json"
+        ):
             return await call_next(request)
         if path.startswith("/assets") or path.startswith("/ws/"):
             return await call_next(request)
         # API路径验证token
         if path.startswith("/api/"):
             # 公开端点：不需要认证
-            public_paths = ["/api/system/info", "/api/system/token", "/api/system/health", "/api/auth/activate"]
+            public_paths = [
+                "/api/system/info",
+                "/api/system/token",
+                "/api/system/health",
+                "/api/auth/activate",
+            ]
             if path in public_paths:
                 return await call_next(request)
             token = request.headers.get("Authorization", "").replace("Bearer ", "")
@@ -97,21 +111,30 @@ def create_app() -> FastAPI:
         return await call_next(request)
 
     from backend.routes import system, plugins, auth as auth_route
+
     app.include_router(system.router, prefix="/api/system", tags=["系统"])
     app.include_router(plugins.router, prefix="/api/plugins", tags=["插件"])
     app.include_router(auth_route.router, prefix="/api/auth", tags=["授权"])
 
     from backend.routes.schedules import router as schedules_router
+
     app.include_router(schedules_router, prefix="/api/schedules", tags=["定时调度"])
 
     from backend.routes.ws import router as ws_router
+
     app.include_router(ws_router, prefix="/ws", tags=["WebSocket"])
 
     # 前端静态文件（生产环境由PyInstaller嵌入）
-    frontend_dist = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend", "dist")
+    from backend.utils.resource_path import resource_path
+
+    frontend_dist = resource_path("frontend/dist")
     if os.path.isdir(frontend_dist):
         # 挂载静态资源目录（js/css/images等）
-        app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="static_assets")
+        app.mount(
+            "/assets",
+            StaticFiles(directory=os.path.join(frontend_dist, "assets")),
+            name="static_assets",
+        )
 
         # SPA catch-all: 非API路由全部返回index.html，让前端router处理
         @app.get("/{full_path:path}")

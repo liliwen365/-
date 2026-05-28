@@ -1,35 +1,46 @@
-; 文件整理系统 Inno Setup 安装脚本
+; 本地自动化平台 Inno Setup 安装脚本
+; 用法: ISCC setup.iss
+; 前置: python build.py 已产出 dist/LocalAgent/
+
+#define AppName "LocalAgent"
+#define AppDisplayName "本地自动化平台"
+#define AppVersion "0.1.0"
+#define AppPublisher "Liliwen365"
+#define AppExeName "LocalAgent.exe"
 
 [Setup]
 AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
-AppName=文件整理系统
-AppVersion=1.0.0
-AppPublisher=Liliwen365
-AppPublisherURL=https://github.com/liliwen365/file-organizer
-AppSupportURL=https://github.com/liliwen365/file-organizer
-DefaultDirName={autopf}\FileOrganizer
+AppName={#AppDisplayName}
+AppVersion={#AppVersion}
+AppPublisher={#AppPublisher}
+DefaultDirName={autopf}\{#AppName}
 DisableProgramGroupPage=yes
 SetupIconFile=assets\icon.ico
-UninstallDisplayIcon={app}\FileOrganizer.exe
+UninstallDisplayIcon={app}\{#AppExeName}
 SolidCompression=yes
 Compression=lzma2/ultra64
-OutputDir=Output
-OutputBaseFilename=FileOrganizer_v1.0.0_Setup
-PrivilegesRequired=admin
+OutputDir=dist
+OutputBaseFilename=LocalAgent-Setup
+PrivilegesRequired=lowest
+WizardStyle=modern
 
 [Languages]
-Name: "chinesesimp"; MessagesFile: "compiler:Default.isl"
+Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce
+Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加图标:"; Flags: checkedonce
+Name: "startupicon"; Description: "开机自动启动"; GroupDescription: "附加选项:"; Flags: unchecked
 
 [Files]
-Source: "dist\FileOrganizer\FileOrganizer.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "dist\FileOrganizer\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\LocalAgent\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\LocalAgent\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\文件整理系统"; Filename: "{app}\FileOrganizer.exe"
-Name: "{autodesktop}\文件整理系统"; Filename: "{app}\FileOrganizer.exe"; AppUserModelID: "com.liliwen365.fileorganizer.pro.v1"; Tasks: desktopicon
+Name: "{autoprograms}\{#AppDisplayName}"; Filename: "{app}\{#AppExeName}"
+Name: "{autodesktop}\{#AppDisplayName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
+
+[Registry]
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#AppName}"; ValueData: """{app}\{#AppExeName}"""; Flags: uninsdeletevalue; Tasks: startupicon
 
 [Run]
-Filename: "{app}\FileOrganizer.exe"; Description: "{cm:LaunchProgram,文件整理系统}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#AppExeName}"; Description: "立即启动{#AppDisplayName}"; Flags: nowait postinstall skipifsilent

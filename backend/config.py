@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """配置管理 - Pydantic Settings + 环境变量。"""
+
 import os
 import platform
 import secrets
@@ -43,9 +44,12 @@ class Settings(BaseSettings):
         if not self.DB_PATH:
             self.DB_PATH = os.path.join(self.DATA_DIR, "localagent.db")
         if not self.PLUGINS_DIR:
-            self.PLUGINS_DIR = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)), "..", "plugins"
-            )
+            if getattr(__import__("sys"), "frozen", False):
+                self.PLUGINS_DIR = os.path.join(__import__("sys")._MEIPASS, "plugins")
+            else:
+                self.PLUGINS_DIR = os.path.join(
+                    os.path.dirname(os.path.abspath(__file__)), "..", "plugins"
+                )
         if not self.USER_PLUGINS_DIR:
             self.USER_PLUGINS_DIR = os.path.join(self.DATA_DIR, "user-plugins")
         self._init_api_token()
