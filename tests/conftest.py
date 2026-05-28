@@ -13,7 +13,9 @@ if ROOT_DIR not in sys.path:
 @pytest.fixture
 def app():
     """创建测试用FastAPI应用（跳过前端静态文件挂载）。"""
-    os.environ["LOCAL_AGENT_DATA_DIR"] = "/tmp/localagent_test"
+    import tempfile
+    test_data_dir = os.path.join(tempfile.gettempdir(), "localagent_test")
+    os.environ["LOCAL_AGENT_DATA_DIR"] = test_data_dir
     from backend.app import create_app
     application = create_app()
     return application
