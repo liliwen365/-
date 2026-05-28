@@ -247,21 +247,46 @@ def test_file_scanner(r, tmp):
         r.fail("带空格路径", result4.error)
 
 
+def _list_available_drives():
+    """列出当前会话可见的所有驱动器。"""
+    import ctypes
+    drives = []
+    bitmask = ctypes.windll.kernel32.GetLogicalDrives()
+    for i in range(26):
+        if bitmask & (1 << i):
+            letter = chr(65 + i) + ":\\"
+            dt = ctypes.windll.kernel32.GetDriveTypeW(letter)
+            types = {2: "可移动", 3: "本地", 4: "网络", 5: "光驱", 6: "RAM"}
+            drives.append(f"{letter} ({types.get(dt, '未知')})")
+    return drives
+
+
 def _drive_exists(drive_path):
     """检测网络驱动器是否可访问（Path.exists() 对映射盘不可靠）。"""
     import ctypes
     path = str(drive_path).rstrip("\\/")
+
+    # 列出所有可见驱动器供诊断
+    available = _list_available_drives()
+    print(f"  可见驱动器: {', '.join(available)}")
+
     # 方法1: GetDriveType 检测盘符类型
     if len(path) == 2 and path[1] == ":":
         dt = ctypes.windll.kernel32.GetDriveTypeW(path + "\\")
-        if dt > 1:  # 1=不存在, >1=存在(2=可移动,3=固定,4=网络,5=光驱,6=RAM)
+        print(f"  GetDriveType({path}\\) = {dt} (1=不存在,3=本地,4=网络)")
+        if dt > 1:
             return True
+
     # 方法2: 尝试列举目录
     try:
-        os.listdir(path + "\\")
+        items = os.listdir(path + "\\")
+        print(f"  os.listdir 成功，共 {len(items)} 项")
         return True
-    except (FileNotFoundError, PermissionError, OSError):
-        return False
+    except Exception as e:
+        print(f"  os.listdir 失败: {type(e).__name__}: {e}")
+
+    # 方法3: 尝试直接访问子路径（有时根目录没权限但子目录可以）
+    return False
 
 
 def test_nas_connection(r, nas_path):
