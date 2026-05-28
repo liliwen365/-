@@ -143,9 +143,14 @@ class TestAuthMiddleware:
         assert resp.status_code == 200
 
     def test_spa_routes_return_html(self, client):
-        """SPA catch-all应返回index.html。"""
-        # 跳过非根路径（GitHub Actions环境可能返回404）
-        for path in ["/"]:
-            resp = client.get(path)
-            assert resp.status_code == 200
-            assert "text/html" in resp.headers.get("content-type", "")
+        """SPA catch-all应返回index.html（仅在前端已构建时）。"""
+        import os
+        frontend_dist = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "frontend", "dist",
+        )
+        if not os.path.isdir(frontend_dist):
+            pytest.skip("前端未构建，跳过SPA路由测试")
+        resp = client.get("/")
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers.get("content-type", "")
