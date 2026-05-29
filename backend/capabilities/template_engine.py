@@ -35,9 +35,12 @@ def build_path(path_template, path_keyword=None, override=None, placeholder_map=
 def build_filename_pattern(pattern_template, primary_keyword="", doc_type="", placeholder_map=None):
     """从模板构建文件名匹配模式。
 
-    当文件关键词为"."时，*{PrimaryKeyword}* 变为 *.*，
-    匹配所有含扩展名的文件。
+    当文件关键词为"."时表示通配（match all），
+    *{PrimaryKeyword}* 变为 *，匹配任意文件。
     """
+    # '.' 是通配符，等价于空字符串：*{PrimaryKeyword}* → ** → 等同于 *
+    if primary_keyword == '.':
+        primary_keyword = ''
     variables = {
         "PrimaryKeyword": str(primary_keyword or ''),
         "DocumentType": str(doc_type or ''),
