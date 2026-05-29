@@ -68,7 +68,8 @@ class PluginManager:
                 try:
                     self._load_plugin(plugin_dir, manifest_path)
                 except Exception as e:
-                    logger.error(f"加载插件 {name} 失败: {e}")
+                    import traceback
+                    logger.error(f"加载插件 {name} 失败: {e}\n{traceback.format_exc()}")
 
         logger.info(f"已加载 {len(self._plugins)} 个插件: {list(self._plugins.keys())}")
 
