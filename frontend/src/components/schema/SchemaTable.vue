@@ -99,6 +99,9 @@
         <el-button type="primary" :disabled="!batchText.trim()" @click="doBatchImport">导入</el-button>
       </template>
     </el-dialog>
+
+    <!-- 路径浏览对话框 -->
+    <PathBrowser ref="pathBrowserRef" title="选择目录" />
   </div>
 </template>
 
@@ -107,6 +110,7 @@ import { ref, computed } from 'vue'
 import { QuestionFilled, InfoFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import KeywordMapInput from './KeywordMapInput.vue'
+import PathBrowser from '../PathBrowser.vue'
 import { parseCompact } from './keywordUtils'
 
 const props = defineProps<{
@@ -163,19 +167,16 @@ function onDel() {
   emit('update:modelValue', props.modelValue.filter((r: any) => !set.has(r)))
 }
 
-function browsePath(colName: string, index: number) {
-  const input = document.createElement('input')
-  input.type = 'file'
-  input.webkitdirectory = true
-  input.onchange = () => {
-    if (input.files?.length) {
-      const path = input.files[0].webkitRelativePath.split('/')[0]
-      const rows = [...props.modelValue]
-      rows[index][colName] = path
-      emit('update:modelValue', rows)
-    }
+const pathBrowserRef = ref<InstanceType<typeof PathBrowser>>()
+
+async function browsePath(colName: string, index: number) {
+  const current = props.modelValue[index][colName] || ''
+  const selected = await pathBrowserRef.value?.open(current)
+  if (selected) {
+    const rows = [...props.modelValue]
+    rows[index][colName] = selected
+    emit('update:modelValue', rows)
   }
-  input.click()
 }
 
 // 单行关键字对话框
