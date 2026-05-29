@@ -95,11 +95,17 @@ class PluginManager:
         import sys
         import importlib.util
         # 清理其他插件目录缓存的模块（避免engine.py等同名模块冲突）
-        stale = [k for k, v in sys.modules.items()
+        # 用 os.sep 适配 Windows 反斜杠路径
+        plugins_marker = f'{os.sep}plugins{os.sep}'
+        stale = [k for k, v in list(sys.modules.items())
                  if hasattr(v, '__file__') and v.__file__
-                 and '/plugins/' in v.__file__ and plugin_dir not in v.__file__]
+                 and plugins_marker in v.__file__
+                 and os.path.normpath(plugin_dir) not in os.path.normpath(v.__file__)]
         for k in stale:
             sys.modules.pop(k, None)
+        # 清理裸名模块（engine, rules 等），强制重新解析
+        for bare in ['engine', 'rules']:
+            sys.modules.pop(bare, None)
         # 确保插件内部import优先找到插件目录
         if plugin_dir not in sys.path:
             sys.path.insert(0, plugin_dir)
