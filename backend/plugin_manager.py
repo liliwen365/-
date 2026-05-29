@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 """插件管理器 — 发现/注册/加载。基于pluggy钩子系统。"""
 import os
+import sys
 import importlib
+import importlib.util
+import traceback
 import yaml
 
 import pluggy
@@ -68,7 +71,6 @@ class PluginManager:
                 try:
                     self._load_plugin(plugin_dir, manifest_path)
                 except Exception as e:
-                    import traceback
                     logger.error(f"加载插件 {name} 失败: {e}\n{traceback.format_exc()}")
 
         logger.info(f"已加载 {len(self._plugins)} 个插件: {list(self._plugins.keys())}")
@@ -83,7 +85,6 @@ class PluginManager:
         if name in self._plugins:
             return
 
-        # 保存manifest包装
         mf = PluginManifest(manifest, plugin_dir)
         self._manifests[name] = mf
 
@@ -93,46 +94,60 @@ class PluginManager:
 
         module_path, class_name = entry.split(":", 1)
 
-        import sys
-        import importlib.util
-        # 清理其他插件目录缓存的模块（避免engine.py等同名模块冲突）
-        # 用 os.sep 适配 Windows 反斜杠路径
-        plugins_marker = f'{os.sep}plugins{os.sep}'
-        stale = [k for k, v in list(sys.modules.items())
-                 if hasattr(v, '__file__') and v.__file__
-                 and plugins_marker in v.__file__
-                 and os.path.normpath(plugin_dir) not in os.path.normpath(v.__file__)]
-        for k in stale:
-            sys.modules.pop(k, None)
-        # 清理裸名模块（engine, rules 等），强制重新解析
-        for bare in ['engine', 'rules']:
-            sys.modules.pop(bare, None)
-        # 确保插件内部import优先找到插件目录
+        # —— 模块隔离策略 ——
+        # 每个插件的 engine.py / rules.py 等同名模块会互相冲突，
+        # 所以加载前清理裸名，加载后把裸名移到命名空间名下。
+        bare_names = ['engine', 'rules', module_path]
+        saved = {}
+        for bare in bare_names:
+            if bare in sys.modules:
+                saved[bare] = sys.modules.pop(bare)
+
+        # 清理上次同名插件的命名空间残留（重新加载场景）
+        ns_prefix = f'_plugin_{name}.'
+        for k in list(sys.modules):
+            if k.startswith(ns_prefix):
+                sys.modules.pop(k)
+
         if plugin_dir not in sys.path:
             sys.path.insert(0, plugin_dir)
-        # 精确加载插件模块，避免与项目根目录同名模块冲突（如main.py）
+
+        # 加载入口模块
         module_file = os.path.join(plugin_dir, f"{module_path}.py")
-        spec = importlib.util.spec_from_file_location(
-            f"_plugin_{name}.{module_path}", module_file,
-        )
+        namespaced = f'_plugin_{name}.{module_path}'
+
+        spec = importlib.util.spec_from_file_location(namespaced, module_file)
         module = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = module
-        spec.loader.exec_module(module)
+        sys.modules[namespaced] = module
+
+        try:
+            spec.loader.exec_module(module)
+        except Exception:
+            # 加载失败：恢复之前保存的模块
+            for bare, mod in saved.items():
+                sys.modules[bare] = mod
+            raise
+
+        # 加载成功后：把 import chain 产生的裸名模块移到命名空间下
+        for bare in ['engine', 'rules']:
+            if bare in sys.modules:
+                sys.modules[f'_plugin_{name}.{bare}'] = sys.modules[bare]
+                del sys.modules[bare]
+
         plugin_class = getattr(module, class_name)
 
         instance = plugin_class()
         instance.plugin_dir = plugin_dir
         instance.manifest = manifest
 
-        # 通过pluggy注册
         self._pm.register(instance, name=name)
         self._plugins[name] = instance
 
-        # 调用可选的on_load钩子
         self._pm.hook.on_load(plugin=instance)
 
-        # 同步到数据库
         self._register_to_db(manifest)
+
+        logger.debug(f"插件 {name} 加载成功，模块: {sorted(k for k in sys.modules if k.startswith(ns_prefix))}")
 
     def _register_to_db(self, manifest: dict):
         db = SessionLocal()
