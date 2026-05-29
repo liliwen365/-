@@ -26,17 +26,17 @@ def app():
 def client(app):
     """同步TestClient，自动处理生命周期。测试环境自动写入激活码。"""
     from fastapi.testclient import TestClient
-    # 测试环境写入一个假激活码，绕过授权检查
-    from backend.database import SessionLocal, SettingModel
-    db = SessionLocal()
-    row = db.query(SettingModel).filter(SettingModel.key == "license_code").first()
-    if not row:
-        db.add(SettingModel(key="license_code", value="test_license"))
-    elif not row.value:
-        row.value = "test_license"
-    db.commit()
-    db.close()
     with TestClient(app) as c:
+        # lifespan 在进入 context 时已执行 create_tables()，此时表已存在
+        from backend.database import SessionLocal, SettingModel
+        db = SessionLocal()
+        row = db.query(SettingModel).filter(SettingModel.key == "license_code").first()
+        if not row:
+            db.add(SettingModel(key="license_code", value="test_license"))
+        elif not row.value:
+            row.value = "test_license"
+        db.commit()
+        db.close()
         yield c
 
 
