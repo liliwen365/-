@@ -12,10 +12,11 @@ if ROOT_DIR not in sys.path:
 
 @pytest.fixture
 def app():
-    """创建测试用FastAPI应用（跳过前端静态文件挂载）。"""
+    """创建测试用FastAPI应用（跳过前端静态文件挂载和授权检查）。"""
     import tempfile
     test_data_dir = os.path.join(tempfile.gettempdir(), "localagent_test")
     os.environ["LOCAL_AGENT_DATA_DIR"] = test_data_dir
+    os.environ["LOCAL_AGENT_SKIP_LICENSE"] = "1"
     from backend.app import create_app
     application = create_app()
     return application
@@ -23,8 +24,18 @@ def app():
 
 @pytest.fixture
 def client(app):
-    """同步TestClient，自动处理生命周期。"""
+    """同步TestClient，自动处理生命周期。测试环境自动写入激活码。"""
     from fastapi.testclient import TestClient
+    # 测试环境写入一个假激活码，绕过授权检查
+    from backend.database import SessionLocal, SettingModel
+    db = SessionLocal()
+    row = db.query(SettingModel).filter(SettingModel.key == "license_code").first()
+    if not row:
+        db.add(SettingModel(key="license_code", value="test_license"))
+    elif not row.value:
+        row.value = "test_license"
+    db.commit()
+    db.close()
     with TestClient(app) as c:
         yield c
 

@@ -6,31 +6,33 @@
         <span>本地自动化平台</span>
       </div>
       <el-menu :default-active="route.path" router class="sidebar-menu">
-        <el-menu-item index="/dashboard">
-          <el-icon><Monitor /></el-icon>
-          <span>仪表板</span>
-        </el-menu-item>
-
-        <el-menu-item-group v-if="pluginStore.plugins.length">
-          <template #title>插件</template>
-          <el-menu-item
-            v-for="p in pluginStore.plugins"
-            :key="p.name"
-            :index="`/plugin/${p.name}`"
-          >
-            <el-icon><FolderOpened /></el-icon>
-            <span>{{ p.display_name }}</span>
+        <template v-if="authStore.activated">
+          <el-menu-item index="/dashboard">
+            <el-icon><Monitor /></el-icon>
+            <span>仪表板</span>
           </el-menu-item>
-        </el-menu-item-group>
 
-        <el-menu-item index="/plugin-manage">
-          <el-icon><Grid /></el-icon>
-          <span>插件管理</span>
-        </el-menu-item>
-        <el-menu-item index="/schedules">
-          <el-icon><Timer /></el-icon>
-          <span>定时调度</span>
-        </el-menu-item>
+          <el-menu-item-group v-if="pluginStore.plugins.length">
+            <template #title>插件</template>
+            <el-menu-item
+              v-for="p in pluginStore.plugins"
+              :key="p.name"
+              :index="`/plugin/${p.name}`"
+            >
+              <el-icon><FolderOpened /></el-icon>
+              <span>{{ p.display_name }}</span>
+            </el-menu-item>
+          </el-menu-item-group>
+
+          <el-menu-item index="/plugin-manage">
+            <el-icon><Grid /></el-icon>
+            <span>插件管理</span>
+          </el-menu-item>
+          <el-menu-item index="/schedules">
+            <el-icon><Timer /></el-icon>
+            <span>定时调度</span>
+          </el-menu-item>
+        </template>
         <el-menu-item index="/settings">
           <el-icon><Setting /></el-icon>
           <span>设置</span>

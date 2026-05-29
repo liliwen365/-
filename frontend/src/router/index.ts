@@ -3,6 +3,7 @@ import type { RouteRecordRaw } from 'vue-router'
 import MainLayout from '@/layouts/MainLayout.vue'
 import api from '@/api'
 import { ElMessage } from 'element-plus'
+import { useAuthStore } from '@/stores/auth'
 
 const staticRoutes: RouteRecordRaw[] = [
   {
@@ -25,7 +26,6 @@ const router = createRouter({
 
 let dynamicRoutesLoaded = false
 
-// 动态路由注册：从后端获取已安装插件并注册路由
 export async function setupDynamicRoutes() {
   try {
     const { data } = await api.get('/api/plugins/installed')
@@ -52,15 +52,23 @@ export async function setupDynamicRoutes() {
   }
 }
 
-// 导航守卫：确保动态路由在导航前加载
+// 导航守卫
 router.beforeEach(async (to, from, next) => {
+  // 首次加载：初始化授权状态和动态路由
   if (!dynamicRoutesLoaded) {
+    const authStore = useAuthStore()
+    await authStore.checkStatus()
     await setupDynamicRoutes()
-    // 动态路由已注册，重新导航以匹配新路由
     if (to.path.startsWith('/plugin/')) {
       next({ ...to, replace: true })
       return
     }
+  }
+  // 未激活：只允许访问设置页（激活入口）
+  const authStore = useAuthStore()
+  if (!authStore.activated && to.path !== '/settings') {
+    next('/settings')
+    return
   }
   next()
 })

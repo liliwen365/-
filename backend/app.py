@@ -80,6 +80,20 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    def _is_activated() -> bool:
+        import os
+        if os.environ.get("LOCAL_AGENT_SKIP_LICENSE"):
+            return True
+        from backend.database import SessionLocal, SettingModel
+        from backend.auth import SecurityManager
+        db = SessionLocal()
+        try:
+            row = db.query(SettingModel).filter(SettingModel.key == "license_code").first()
+            code = row.value if row else ""
+            return SecurityManager().is_activated(code)
+        finally:
+            db.close()
+
     @app.middleware("http")
     async def token_auth(request: Request, call_next):
         path = request.url.path
@@ -108,6 +122,12 @@ def create_app() -> FastAPI:
                 query_token = request.query_params.get("token", "")
                 if query_token != settings.API_TOKEN:
                     return Response(status_code=401, content="Unauthorized")
+            # 未激活时只允许访问授权相关接口和设置页信息
+            if not _is_activated():
+                allowed = ["/api/auth/", "/api/system/info", "/api/system/token",
+                           "/api/system/health", "/api/system/browse"]
+                if not any(path.startswith(p) for p in allowed):
+                    return Response(status_code=403, content="软件未授权，请先激活")
         return await call_next(request)
 
     from backend.routes import system, plugins, auth as auth_route
