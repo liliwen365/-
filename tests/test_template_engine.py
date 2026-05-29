@@ -54,3 +54,19 @@ class TestBuildFilenamePattern:
     def test_empty_keyword(self):
         result = build_filename_pattern("*{PrimaryKeyword}*.*", "", "")
         assert result == "**.*"
+
+    def test_dot_wildcard(self):
+        """关键词为'.'时应视为通配，不是字面点号。"""
+        import fnmatch
+        pattern = build_filename_pattern("*{PrimaryKeyword}*合同*.*", ".", "合同")
+        assert pattern == "**合同*.*"
+        assert fnmatch.fnmatch("测试文件合同.xls", pattern)
+        assert fnmatch.fnmatch("采购合同.pdf", pattern)
+        assert not fnmatch.fnmatch("readme.txt", pattern)
+
+    def test_dot_wildcard_simple(self):
+        """简单模板 *{PrimaryKeyword}*.* + '.' 应匹配所有文件。"""
+        import fnmatch
+        pattern = build_filename_pattern("*{PrimaryKeyword}*.*", ".", "")
+        assert fnmatch.fnmatch("任意文件名.xlsx", pattern)
+        assert fnmatch.fnmatch("test.doc", pattern)
