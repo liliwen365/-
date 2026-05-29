@@ -51,6 +51,7 @@ hiddenimports = [
     'backend.capabilities.template_engine',
     'backend.capabilities.progress',
     'backend.capabilities.matcher',
+    'backend.capabilities.excel_reader',
     'backend.base_plugin',
     # pydantic / anyio / http
     'pydantic_settings',
@@ -63,6 +64,7 @@ hiddenimports = [
     'pystray._win32',
     # 插件独有依赖（主代码未 import，静态分析检测不到）
     'requests',
+    'pandas',
     # 插件 engine + rules（动态加载）
     'engine',
     'rules',
