@@ -234,7 +234,7 @@ const showBatchImport = ref(false)
 const batchText = ref('')
 
 function doBatchImport() {
-  const lines = batchText.value.trim().split('\n').filter(l => l.trim())
+  const lines = batchText.value.trim().split(/\r?\n/).filter(l => l.trim())
   const newRows: any[] = []
   const cols = props.schema.columns || []
   for (const line of lines) {

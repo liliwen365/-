@@ -442,18 +442,22 @@ async function saveConfig() {
 }
 
 onMounted(async () => {
-  const { data } = await pluginApi.getInfo(pluginName.value)
-  pluginInfo.value = data
-  const { data: config } = await pluginApi.getConfig(pluginName.value)
-  formData.value = config
+  try {
+    const { data } = await pluginApi.getInfo(pluginName.value)
+    pluginInfo.value = data
+    const { data: config } = await pluginApi.getConfig(pluginName.value)
+    formData.value = config
 
-  // 标记初始化完成，后续formData变化才触发自动保存
-  await new Promise(r => setTimeout(r, 0))
-  initialized = true
+    // 标记初始化完成，后续formData变化才触发自动保存
+    await new Promise(r => setTimeout(r, 0))
+    initialized = true
 
-  // File-organizer: auto-open rules dialog on first use
-  if (isFileOrganizer.value && !formData.value.rules?.length && pluginInfo.value.templates?.length) {
-    rulesDialogVisible.value = true
+    // File-organizer: auto-open rules dialog on first use
+    if (isFileOrganizer.value && !formData.value.rules?.length && pluginInfo.value.templates?.length) {
+      rulesDialogVisible.value = true
+    }
+  } catch (e: any) {
+    ElMessage.error('加载插件信息失败: ' + (e.message || '未知错误'))
   }
 })
 
@@ -584,7 +588,8 @@ async function loadHistory() {
 watch(historyDialogVisible, (v) => { if (v) loadHistory() })
 
 async function openFolder(filePath: string) {
-  const dir = filePath.substring(0, filePath.lastIndexOf('/'))
+  const sepIdx = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'))
+  const dir = sepIdx >= 0 ? filePath.substring(0, sepIdx) : filePath
   try {
     await systemApi.openFolder(dir)
   } catch {

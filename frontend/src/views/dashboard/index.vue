@@ -90,8 +90,12 @@ function formatPlatform(p: string): string {
 }
 
 onMounted(async () => {
-  const { data } = await systemApi.getInfo()
-  info.value = data
+  try {
+    const { data } = await systemApi.getInfo()
+    info.value = data
+  } catch {
+    // 系统信息加载失败不影响页面
+  }
 
   try {
     const { data: s } = await api.get('/api/system/stats')

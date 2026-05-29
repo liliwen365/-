@@ -40,7 +40,17 @@ const activating = ref(false)
 onMounted(() => authStore.checkStatus())
 
 function copyMachineId() {
-  navigator.clipboard.writeText(authStore.machineId)
+  const text = authStore.machineId
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text)
+  } else {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  }
   ElMessage.success('机器码已复制，请发送给供应商以获取授权码')
 }
 
