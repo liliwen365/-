@@ -51,7 +51,7 @@ hiddenimports = [
     'backend.capabilities.template_engine',
     'backend.capabilities.progress',
     'backend.capabilities.matcher',
-    'backend.capabilities.excel_reader',
+    'backend.base_plugin',
     # pydantic / anyio / http
     'pydantic_settings',
     'anyio',

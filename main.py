@@ -6,6 +6,12 @@ import time
 import webbrowser
 import threading
 
+# console=False 模式下 sys.stderr/stdout 为 None，第三方库写它们会崩溃
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w", encoding="utf-8")
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w", encoding="utf-8")
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from backend.config import settings
@@ -19,6 +25,10 @@ def start_server(port: int):
 
 
 def main():
+    # 建表必须在查询之前
+    from backend.database import create_tables
+    create_tables()
+
     port = settings.PORT
     logger.info(f"{settings.APP_NAME} v{settings.APP_VERSION} 启动")
 
