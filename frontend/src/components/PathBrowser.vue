@@ -67,8 +67,8 @@ async function loadPath(path: string) {
   loading.value = true
   currentPath.value = path
   try {
-    const res = await api.post('/system/browse', { path, type: 'directory' })
-    parentPath.value = res.data.parent
+    const res = await api.post('/api/system/browse', { path, type: 'directory' })
+    parentPath.value = res.data.parent && res.data.parent !== res.data.current ? res.data.parent : null
     entries.value = res.data.entries || []
   } catch {
     entries.value = []
