@@ -25,6 +25,11 @@ def start_server(port: int):
 
 
 def main():
+    # Windows + PyInstaller: 子进程必须调用 freeze_support，
+    # 否则 ProcessPoolExecutor 产出的子进程会重新执行 main.py 导致崩溃
+    import multiprocessing
+    multiprocessing.freeze_support()
+
     # 建表必须在查询之前
     from backend.database import create_tables
     create_tables()
