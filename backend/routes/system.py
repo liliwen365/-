@@ -105,6 +105,40 @@ def system_stats():
         db.close()
 
 
+@router.get("/diagnostic")
+def diagnostic():
+    """插件加载诊断 — 浏览器直接访问查看。"""
+    from backend.app import plugin_manager
+    import sys as _sys
+
+    pm = plugin_manager
+    loaded = list(pm._plugins.keys())
+    manifests = {}
+    load_errors = getattr(pm, '_load_errors', [])
+
+    for name, mf in pm._manifests.items():
+        manifests[name] = {
+            "dir": mf.plugin_dir,
+            "dir_exists": os.path.isdir(mf.plugin_dir),
+            "files": os.listdir(mf.plugin_dir) if os.path.isdir(mf.plugin_dir) else [],
+        }
+
+    plugin_modules = {k: str(v) for k, v in _sys.modules.items() if '_plugin_' in k}
+
+    return {
+        "plugins_loaded": loaded,
+        "plugins_count": len(loaded),
+        "plugins_dir": settings.PLUGINS_DIR,
+        "plugins_dir_exists": os.path.isdir(settings.PLUGINS_DIR),
+        "plugins_dir_contents": os.listdir(settings.PLUGINS_DIR) if os.path.isdir(settings.PLUGINS_DIR) else [],
+        "manifests": manifests,
+        "plugin_modules_in_sys": plugin_modules,
+        "load_errors": load_errors,
+        "data_dir": settings.DATA_DIR,
+        "python_path_0": _sys.path[0] if _sys.path else "",
+    }
+
+
 @router.post("/open-folder")
 def open_folder(req: OpenPathRequest):
     """在系统文件管理器中打开指定文件夹。"""

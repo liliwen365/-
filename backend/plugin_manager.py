@@ -53,6 +53,7 @@ class PluginManager:
         self._pm.add_hookspecs(LocalAgentSpec)
         self._plugins: dict[str, object] = {}
         self._manifests: dict[str, PluginManifest] = {}
+        self._load_errors: list[str] = []
 
     def discover_plugins(self):
         """扫描插件目录，发现并加载所有插件。"""
@@ -71,7 +72,9 @@ class PluginManager:
                 try:
                     self._load_plugin(plugin_dir, manifest_path)
                 except Exception as e:
-                    logger.error(f"加载插件 {name} 失败: {e}\n{traceback.format_exc()}")
+                    err = f"加载插件 {name} 失败: {e}\n{traceback.format_exc()}"
+                    logger.error(err)
+                    self._load_errors.append(err)
 
         logger.info(f"已加载 {len(self._plugins)} 个插件: {list(self._plugins.keys())}")
 
