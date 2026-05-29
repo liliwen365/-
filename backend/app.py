@@ -84,15 +84,18 @@ def create_app() -> FastAPI:
         import os
         if os.environ.get("LOCAL_AGENT_SKIP_LICENSE"):
             return True
-        from backend.database import SessionLocal, SettingModel
-        from backend.auth import SecurityManager
-        db = SessionLocal()
         try:
-            row = db.query(SettingModel).filter(SettingModel.key == "license_code").first()
-            code = row.value if row else ""
-            return SecurityManager().is_activated(code)
-        finally:
-            db.close()
+            from backend.database import SessionLocal, SettingModel
+            from backend.auth import SecurityManager
+            db = SessionLocal()
+            try:
+                row = db.query(SettingModel).filter(SettingModel.key == "license_code").first()
+                code = row.value if row else ""
+                return SecurityManager().is_activated(code)
+            finally:
+                db.close()
+        except Exception:
+            return False
 
     @app.middleware("http")
     async def token_auth(request: Request, call_next):
