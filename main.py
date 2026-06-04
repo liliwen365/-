@@ -6,7 +6,7 @@ import time
 import webbrowser
 import threading
 
-# console=False 模式下 sys.stderr/stdout 为 None，第三方库写它们会崩溃
+# console=False 下 sys.stderr/stdout 为 None，第三方库写它们会崩溃
 if sys.stderr is None:
     sys.stderr = open(os.devnull, "w", encoding="utf-8")
 if sys.stdout is None:

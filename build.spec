@@ -46,6 +46,7 @@ hiddenimports = [
     'backend.routes.ws',
     'backend.utils.tray',
     'backend.utils.resource_path',
+    'backend.base_plugin',
     'backend.capabilities.file_scanner',
     'backend.capabilities.file_ops',
     'backend.capabilities.template_engine',
