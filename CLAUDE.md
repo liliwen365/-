@@ -24,20 +24,17 @@
 
 ## 自我进化机制
 
-三层持续进化（基于 Boris Cherny 官方最佳实践 + 社区 Learnings Loop）：
-
-**第一层 — 实时学习**：非平凡工作后反思，新经验追加到 `learnings.md`
-**第二层 — `/self-evolve`**：快速审计六大维度（CLAUDE.md/rules/memory/learnings/commands/代码库同步）
-**第三层 — `/evolve-deep`**：深度进化，分析 mistake patterns，升级 learnings → rules → memory
-
-维护节奏：每次 session 结束可运行 `/update-learnings`；每周或 learnings 超100条运行 `/consolidate-learnings`
+两层持续进化（确保真正生效）：
+- **第一层 — 自动捕获**：Stop hook 检测 → Claude 自动写入 learnings.md
+- **第二层 — 定期审计**：`/self-evolve` 唯一进化入口（六维度检查 + 整合升级）
+- session 开始时自动检查上次进化日期，超过 7 天提醒用户运行 /self-evolve
 
 ## 代码规范
 
 - 用户可见文本用中文，变量名/函数名用英文snake_case
 - 常量用UPPER_SNAKE_CASE
 - 不写注释解释"是什么"，仅写"为什么这样"的非显而易见原因
-- 具体规范见 .claude/rules/（API kebab-case → python-rules.md；Element Plus → vue-rules.md；列名规范 → plugin-rules.md）
+- 具体规范见 .claude/rules/（按路径自动加载）
 
 ## 关键约束
 
