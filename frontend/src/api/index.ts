@@ -66,7 +66,7 @@ export const pluginApi = {
   saveConfig: (name: string, config: any) => api.put(`/api/plugins/${name}/config`, { config }),
   execute: (name: string, params: any, feature_id = '') => api.post(`/api/plugins/${name}/execute`, { params, feature_id }),
   getStatus: (name: string, taskId: number) => api.get(`/api/plugins/${name}/status`, { params: { task_id: taskId } }),
-  cancel: (name: string, taskId: number) => api.post(`/api/plugins/${name}/cancel`, { task_id: taskId }),
+  cancel: (name: string, taskId: number) => api.post(`/api/plugins/${name}/cancel`, null, { params: { task_id: taskId } }),
   loadTemplate: (name: string, template: string) => api.get(`/api/plugins/${name}/templates/${encodeURIComponent(template)}`),
   getHistory: (name: string) => api.get(`/api/plugins/${name}/history`),
 }
