@@ -261,17 +261,35 @@ class TaskRunner:
             await asyncio.sleep(0.2)
 
     async def cancel(self, task_id: int) -> bool:
-        """取消正在执行的任务：取消协程（触发强杀子进程）+ 兜底 terminate。"""
+        """取消正在执行的任务：取消协程（触发强杀子进程）+ 进程残留兜底 + 诊断日志。"""
         atask = self._active_tasks.get(task_id)
+        p = self._task_processes.get(task_id)
+        logger.info(
+            f"cancel(task={task_id}): 协程={'有(done)' if atask and atask.done() else '有(running)' if atask else '无'}, "
+            f"进程={'有(alive)' if (p and p.is_alive()) else '无/不alive'}"
+        )
         if atask and not atask.done():
             # 取消协程 → 触发 _run_in_subprocess 的 CancelledError 分支 → terminate 子进程
             atask.cancel()
             return True
-        # 协程已结束但进程残留（异常情况），兜底强杀
-        p = self._task_processes.get(task_id)
         if p and p.is_alive():
+            # 协程已结束但进程残留（异常情况）—— 强制终止并标记
             self._terminate_process(p)
+            self._update_task(task_id, status="cancelled",
+                              progress_message="已取消（强制终止残留进程）")
+            logger.info(f"cancel(task={task_id}): 残留进程已强制终止")
             return True
+        # 既无活跃协程也无存活进程 —— 查数据库看任务真实状态（便于诊断"取消失败"原因）
+        db = SessionLocal()
+        try:
+            t = db.query(TaskHistoryModel).get(task_id)
+            db_status = t.status if t else "(记录不存在)"
+        finally:
+            db.close()
+        logger.warning(
+            f"cancel(task={task_id}) 找不到活跃协程/进程，数据库状态={db_status}"
+            f"{'（任务可能已完成，前端进度未刷新）' if db_status in ('success', 'error', 'cancelled') else ''}"
+        )
         return False
 
     def get_status(self, task_id: int) -> dict | None:

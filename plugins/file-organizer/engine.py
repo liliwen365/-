@@ -14,7 +14,7 @@ from backend.capabilities.progress import ParallelProgress
 from backend.logger import logger
 
 
-def _scan_one_task(task_row, active_rules):
+def _scan_one_task(task_row, active_rules, on_dir_progress=None):
     """扫描单个任务的所有规则，返回 (plan_records, task_update_info)。"""
     task_id = task_row['task_id']
     dest_root = task_row['dest_root']
@@ -59,6 +59,7 @@ def _scan_one_task(task_row, active_rules):
                     final_search_path, rule_row['filename_pattern'],
                     pattern_builder=lambda p, _kw=filename_keyword, _dt=doc_type:
                         build_filename_pattern(p, _kw, _dt),
+                    on_progress=on_dir_progress,
                 )
 
                 base_record = {
@@ -124,9 +125,21 @@ def scan_tasks(tasks_df, rules_df, on_progress=None):
 
     task_items = list(tasks_to_scan.iterrows())
 
+    # 目录级进度回调（节流：每50个目录报一次），让前端扫描中能看到进度，不"假卡住"
+    dir_progress_cb = None
+    if on_progress:
+        _cnt = [0]
+        def dir_progress_cb(root, scanned):
+            _cnt[0] += 1
+            if _cnt[0] % 50 == 0:
+                try:
+                    on_progress(0, 0, f"扫描中… 已比对 {scanned} 个文件", "")
+                except Exception:
+                    pass
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_idx = {
-            executor.submit(_scan_one_task, row, active_rules): (idx, row['task_id'])
+            executor.submit(_scan_one_task, row, active_rules, dir_progress_cb): (idx, row['task_id'])
             for idx, (_, row) in enumerate(task_items)
         }
         tracker = ParallelProgress(total=total_tasks, on_progress=on_progress)
