@@ -115,6 +115,47 @@ class TestPluginExecution:
         assert result["status"] == "error"
         assert "请先添加任务" in result["progress_message"]
 
+    def test_validate_error_returns_400_with_message(self, client, auth_headers):
+        """任务行字段不完整时，execute 应返回400并带中文校验消息（修复前是500吞掉原因）。"""
+        resp = client.post(
+            "/api/plugins/file-organizer/execute",
+            json={"params": {
+                "tasks": [{"task_id": "T1"}],  # 故意缺 dest_root
+                "rules": [{"doc_type": "发票", "search_path": "D:/x", "filename_pattern": "*"}],
+                "action": "scan",
+            }},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 400
+        assert "目标存放路径不能为空" in resp.json()["detail"]
+
+    def test_status_includes_error_traceback_field(self, client, auth_headers):
+        """status 接口应返回 error_traceback 字段（供前端展示失败详情）。"""
+        resp = client.post(
+            "/api/plugins/file-organizer/execute",
+            json={"params": {"tasks": [], "rules": [], "action": "scan"}},
+            headers=auth_headers,
+        )
+        task_id = resp.json()["task_id"]
+        import time
+        status_resp = resp
+        for _ in range(10):
+            status_resp = client.get(
+                f"/api/plugins/file-organizer/status?task_id={task_id}",
+                headers=auth_headers,
+            )
+            if status_resp.json()["status"] in ("success", "error", "cancelled"):
+                break
+            time.sleep(0.5)
+        assert "error_traceback" in status_resp.json()
+
+    def test_history_includes_error_traceback_field(self, client, auth_headers):
+        """历史记录每条应包含 error_traceback 字段。"""
+        resp = client.get("/api/plugins/file-organizer/history", headers=auth_headers)
+        assert resp.status_code == 200
+        for item in resp.json()["history"]:
+            assert "error_traceback" in item
+
     def test_installed_plugins_list(self, client, auth_headers):
         resp = client.get("/api/plugins/installed", headers=auth_headers)
         assert resp.status_code == 200

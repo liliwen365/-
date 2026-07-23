@@ -121,6 +121,22 @@
       <el-button v-if="running" type="danger" size="large" @click="onCancel">取消</el-button>
     </div>
 
+    <!-- Error display (失败原因展示，所有插件通用) -->
+    <el-alert v-if="errorData" type="error" :closable="false" style="margin-top: 16px" show-icon>
+      <template #title>{{ friendlyError(errorData).title }}</template>
+      <template #default>
+        <el-button text size="small" @click="errorDetailVisible = true">查看技术详情</el-button>
+      </template>
+    </el-alert>
+
+    <!-- Error detail dialog -->
+    <el-dialog v-model="errorDetailVisible" title="错误详情" width="720px" destroy-on-close>
+      <pre class="error-detail">{{ friendlyError(errorData).detail }}</pre>
+      <template #footer>
+        <el-button @click="errorDetailVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
     <!-- Progress -->
     <el-progress v-if="running" :percentage="progress.percent" :format="() => progress.message" style="margin-top: 16px" :stroke-width="18" striped striped-flow />
 
@@ -337,16 +353,21 @@
     </el-dialog>
 
     <!-- History dialog -->
-    <el-dialog v-model="historyDialogVisible" title="执行历史" width="700px" destroy-on-close>
+    <el-dialog v-model="historyDialogVisible" title="执行历史" width="780px" destroy-on-close>
       <el-table :data="history" size="small" border v-loading="historyLoading">
         <el-table-column prop="id" label="#" width="60" />
         <el-table-column label="状态" width="80">
           <template #default="{ row }">
-            <el-tag :type="row.status === 'success' ? 'success' : 'danger'" size="small">{{ row.status }}</el-tag>
+            <el-tag :type="row.status === 'success' ? 'success' : row.status === 'cancelled' ? 'info' : 'danger'" size="small">{{ row.status }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="summary" label="结果" show-overflow-tooltip />
         <el-table-column prop="created_at" label="执行时间" width="170" />
+        <el-table-column label="操作" width="90">
+          <template #default="{ row }">
+            <el-button v-if="row.status === 'error' && row.error_traceback" link type="primary" size="small" @click="showHistoryError(row.error_traceback)">查看错误</el-button>
+          </template>
+        </el-table-column>
       </el-table>
       <el-empty v-if="!history.length && !historyLoading" description="暂无执行记录，执行后将在此显示" />
     </el-dialog>
@@ -359,6 +380,7 @@ import { useRoute } from 'vue-router'
 import { pluginApi, systemApi } from '@/api'
 import { ElMessage } from 'element-plus'
 import SchemaTable from '@/components/schema/SchemaTable.vue'
+import { friendlyError } from '@/utils/errorMessage'
 
 const route = useRoute()
 const pluginName = computed(() => route.path.replace('/plugin/', ''))
@@ -369,6 +391,8 @@ const formData = ref<any>({})
 const running = ref(false)
 const progress = ref({ percent: 0, message: '' })
 const resultData = ref<any>(null)
+const errorData = ref('')               // 失败原因（traceback 或校验消息），空=无错误
+const errorDetailVisible = ref(false)   // 错误详情弹窗
 
 // File-organizer specific state
 const plan = ref<any[]>([])
@@ -484,6 +508,7 @@ async function onScan() {
   progress.value = { percent: 0, message: '扫描中...' }
   plan.value = []
   copyDone.value = false
+  errorData.value = ''
   currentTaskId.value = null
   try {
     const { data } = await pluginApi.execute(pluginName.value, { ...formData.value, action: 'scan' })
@@ -491,13 +516,16 @@ async function onScan() {
     await pollUntilDone(data.task_id)
   } catch (e: any) {
     running.value = false
-    ElMessage.error(e.response?.data?.detail || '扫描失败')
+    const detail = e.response?.data?.detail || '扫描失败'
+    errorData.value = detail
+    ElMessage.error(friendlyError(detail).title)
   }
 }
 
 async function onCopy() {
   running.value = true
   progress.value = { percent: 0, message: '复制中...' }
+  errorData.value = ''
   currentTaskId.value = null
   try {
     const { data } = await pluginApi.execute(pluginName.value, { ...formData.value, action: 'copy', plan: plan.value })
@@ -506,7 +534,9 @@ async function onCopy() {
     copyDone.value = true
   } catch (e: any) {
     running.value = false
-    ElMessage.error(e.response?.data?.detail || '复制失败')
+    const detail = e.response?.data?.detail || '复制失败'
+    errorData.value = detail
+    ElMessage.error(friendlyError(detail).title)
   }
 }
 
@@ -516,6 +546,7 @@ async function onExecute() {
   running.value = true
   progress.value = { percent: 0, message: '执行中...' }
   resultData.value = null
+  errorData.value = ''
   currentTaskId.value = null
   try {
     const { data } = await pluginApi.execute(pluginName.value, formData.value)
@@ -523,7 +554,9 @@ async function onExecute() {
     await pollUntilDone(data.task_id)
   } catch (e: any) {
     running.value = false
-    ElMessage.error(e.response?.data?.detail || '执行失败')
+    const detail = e.response?.data?.detail || '执行失败'
+    errorData.value = detail
+    ElMessage.error(friendlyError(detail).title)
   }
 }
 
@@ -541,6 +574,7 @@ async function pollUntilDone(taskId: number) {
       if (['success', 'error', 'cancelled'].includes(data.status)) {
         running.value = false
         if (data.status === 'success' && data.result) {
+          errorData.value = ''
           if (isFileOrganizer.value) {
             if (data.result.data?.plan) plan.value = data.result.data.plan
             if (data.result.data?.tasks) formData.value.tasks = data.result.data.tasks
@@ -549,7 +583,10 @@ async function pollUntilDone(taskId: number) {
           }
           ElMessage.success(data.result.summary || data.progress_message)
         } else if (data.status === 'error') {
-          ElMessage.error(data.progress_message || '执行失败')
+          // 优先用 error_traceback（子进程异常），其次用 progress_message（业务级 error，如"请先添加任务和规则"）
+          const tb = data.error_traceback || data.progress_message || '执行失败'
+          errorData.value = tb
+          ElMessage.error(friendlyError(tb).title)
         }
         return
       }
@@ -586,6 +623,11 @@ async function loadHistory() {
 }
 
 watch(historyDialogVisible, (v) => { if (v) loadHistory() })
+
+function showHistoryError(traceback: string) {
+  errorData.value = traceback
+  errorDetailVisible.value = true
+}
 
 async function openFolder(filePath: string) {
   const sepIdx = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'))
@@ -629,5 +671,17 @@ async function openFolder(filePath: string) {
   margin-top: 16px;
   display: flex;
   gap: 12px;
+}
+.error-detail {
+  max-height: 400px;
+  overflow: auto;
+  background: #f5f7fa;
+  padding: 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: 'Menlo', 'Consolas', monospace;
+  margin: 0;
 }
 </style>

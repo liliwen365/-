@@ -83,8 +83,11 @@ class TaskRunner:
         """异步启动插件执行，立即返回task_id。"""
         self._ensure_executor()
 
-        if self._loop is None:
+        # event loop 可能在测试隔离或运行时重建后关闭；若沿用旧 loop 会抛
+        # "Event loop is closed"。检测后重新绑定，并废弃挂在旧 loop 上的 poll_task。
+        if self._loop is None or self._loop.is_closed():
             self._loop = asyncio.get_running_loop()
+            self._poll_task = None
 
         if self._poll_task is None or self._poll_task.done():
             self._poll_task = self._loop.create_task(self._poll_progress())
@@ -151,6 +154,7 @@ class TaskRunner:
             elapsed_ms = int((time.time() - start_time) * 1000)
 
             if error_tb:
+                logger.error(f"任务 {task_id} 执行失败:\n{error_tb}")
                 self._update_task(
                     task_id, status="error",
                     progress_message="执行失败",
@@ -167,12 +171,14 @@ class TaskRunner:
                     duration_ms=elapsed_ms,
                 )
             else:
+                logger.error(f"任务 {task_id} 无返回结果（插件未正常输出）")
                 self._update_task(task_id, status="error", progress_message="无返回结果",
                                   duration_ms=elapsed_ms)
 
         except asyncio.CancelledError:
             self._update_task(task_id, status="cancelled", progress_message="已取消")
         except Exception as e:
+            logger.error(f"任务 {task_id} 执行异常: {e}")
             self._update_task(task_id, status="error", progress_message=str(e),
                               error_traceback=traceback.format_exc())
 
@@ -234,6 +240,7 @@ class TaskRunner:
                 "progress_message": t.progress_message,
                 "summary": "",
                 "result": json.loads(t.result_json) if t.result_json else None,
+                "error_traceback": t.error_traceback or "",
                 "created_at": str(t.created_at),
                 "finished_at": str(t.finished_at) if t.finished_at else None,
                 "duration_ms": t.duration_ms,

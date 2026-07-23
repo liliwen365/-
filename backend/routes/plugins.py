@@ -134,11 +134,13 @@ async def execute_plugin(name: str, body: ExecuteRequest):
     if not p:
         raise HTTPException(404, f"插件 {name} 未安装")
 
-    validated = p.validate_params(body.params)
-    params = {**validated, "feature_id": body.feature_id}
-
     try:
+        validated = p.validate_params(body.params)
+        params = {**validated, "feature_id": body.feature_id}
         task_id = await task_runner.start(p, params)
+    except ValueError as e:
+        # 校验错误：保留插件抛出的中文消息透传给前端（如"目标存放路径不能为空"）
+        raise HTTPException(400, str(e))
     except Exception as e:
         logger.error(f"启动插件 {name} 执行失败: {e}")
         raise HTTPException(500, f"启动执行失败: {e}")
@@ -179,6 +181,7 @@ def plugin_history(name: str, limit: int = 20):
             {
                 "id": r.id, "status": r.status,
                 "summary": r.progress_message or "",
+                "error_traceback": r.error_traceback or "",
                 "duration_ms": r.duration_ms,
                 "created_at": str(r.created_at),
                 "finished_at": str(r.finished_at) if r.finished_at else "",
