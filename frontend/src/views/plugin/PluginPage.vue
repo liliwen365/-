@@ -602,7 +602,7 @@ async function onCancel() {
   if (!currentTaskId.value) return
   try {
     await pluginApi.cancel(pluginName.value, currentTaskId.value)
-    ElMessage.info('已发送取消请求')
+    ElMessage.info('正在终止任务...（后台子进程会被强制结束）')
   } catch {
     ElMessage.error('取消失败')
   }

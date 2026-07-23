@@ -26,6 +26,7 @@ def setup_logger():
         retention="30 days",
         encoding="utf-8",
         level="DEBUG",
+        enqueue=True,  # 多进程并发写安全（主进程+worker 同时写日志文件、跨日轮转不竞态）
     )
 
 

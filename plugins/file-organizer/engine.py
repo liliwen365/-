@@ -11,8 +11,7 @@ from backend.capabilities.file_scanner import scan_directory, ScanReport
 from backend.capabilities.file_ops import copy_file, CopyResult
 from backend.capabilities.progress import ParallelProgress
 
-import logging
-logger = logging.getLogger(__name__)
+from backend.logger import logger
 
 
 def _scan_one_task(task_row, active_rules):
@@ -120,6 +119,7 @@ def scan_tasks(tasks_df, rules_df, on_progress=None):
 
     plan_records = []
     total_tasks = len(tasks_to_scan)
+    logger.info(f"开始扫描 {total_tasks} 个任务，启用规则 {len(active_rules)} 条")
     max_workers = min(32, (os.cpu_count() or 1) + 4)
 
     task_items = list(tasks_to_scan.iterrows())

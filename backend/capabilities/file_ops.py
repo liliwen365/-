@@ -5,6 +5,7 @@ import shutil
 import time
 import concurrent.futures
 
+from backend.logger import logger
 from backend.capabilities.progress import ParallelProgress
 
 
@@ -56,6 +57,8 @@ def copy_files_parallel(items, on_progress=None, retry_attempts=3, retry_delay=1
     if max_workers is None:
         max_workers = min(32, (os.cpu_count() or 1) + 4)
 
+    logger.info(f"开始复制 {len(items)} 个文件")
+
     results = [None] * len(items)
     tracker = ParallelProgress(total=len(items), on_progress=on_progress)
 
@@ -73,6 +76,7 @@ def copy_files_parallel(items, on_progress=None, retry_attempts=3, retry_delay=1
                 results[idx] = CopyResult(src, dst, "failure", str(exc))
             tracker.record(os.path.basename(str(items[idx][0])))
 
+    logger.info(f"复制完成: {len(items)} 个文件")
     return results
 
 

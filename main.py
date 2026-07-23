@@ -24,11 +24,39 @@ def start_server(port: int):
     uvicorn.run("backend.app:app", host=settings.HOST, port=port, log_level="info")
 
 
+# 单实例锁文件句柄，保持打开以持有锁，进程退出自动释放
+_instance_lock_fp = None
+
+
+def _acquire_single_instance_lock():
+    """占用单实例锁，失败说明已有实例运行 → 直接退出。跨平台（msvcrt/fcntl）。
+
+    双开会导致抢 SQLite 文件锁、加倍资源占用、日志重复，必须杜绝。
+    """
+    lock_path = os.path.join(settings.DATA_DIR, ".single.lock")
+    try:
+        fp = open(lock_path, "w")
+        if sys.platform == "win32":
+            import msvcrt
+            msvcrt.locking(fp.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(fp.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        global _instance_lock_fp
+        _instance_lock_fp = fp  # 保持持有，防 GC 关闭而释放锁
+    except (OSError, IOError):
+        logger.warning("检测到已有实例在运行，本次启动退出。")
+        sys.exit(0)
+
+
 def main():
     # Windows + PyInstaller: 子进程必须调用 freeze_support，
     # 否则 ProcessPoolExecutor 产出的子进程会重新执行 main.py 导致崩溃
     import multiprocessing
     multiprocessing.freeze_support()
+
+    # 单实例锁：防止重复启动（双开会抢 SQLite 锁、加倍资源占用、日志重复）
+    _acquire_single_instance_lock()
 
     # 建表必须在查询之前
     from backend.database import create_tables

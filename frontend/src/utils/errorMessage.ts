@@ -20,6 +20,9 @@ const RULES: Array<{ test: RegExp; title: string }> = [
   { test: /请先添加任务/, title: '任务清单为空，请先添加任务' },
   { test: /请先配置规则/, title: '还未配置规则，请先加载模板或手动配置规则' },
 
+  // 执行控制类（超时强杀）
+  { test: /执行超时|TaskTimeout|超过.*秒被强制终止/, title: '任务执行超时已自动终止。可能原因：搜索路径范围过大、网络盘无响应、文件过多。请缩小搜索路径范围后重试' },
+
   // 文件系统类（traceback 里的异常类型或 file_scanner 的报错）
   { test: /FileNotFoundError|路径或模式为空/, title: '文件或目录不存在，请检查配置的路径是否还在、是否被移动' },
   { test: /PermissionError|Access is denied|拒绝访问/, title: '没有访问权限，请检查文件夹权限或是否被其他程序占用' },

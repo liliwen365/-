@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     PORT: int = 8088
     DEBUG: bool = False
 
+    # 执行过程控制（.env 可覆盖，前缀 LOCAL_AGENT_）
+    TASK_TIMEOUT_SEC: int = 600     # 单任务最长执行秒数，超时强杀
+    SCAN_MAX_FILES: int = 50000     # 单次扫描最多收集文件数，防 OOM/无限递归
+    SCAN_MAX_DEPTH: int = 10        # os.walk 最大递归深度
+
     IS_WINDOWS: bool = platform.system() == "Windows"
     IS_MAC: bool = platform.system() == "Darwin"
 

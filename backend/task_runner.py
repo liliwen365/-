@@ -1,19 +1,25 @@
 # -*- coding: utf-8 -*-
-"""插件任务执行引擎 — 异步后台执行 + 进程隔离。"""
+"""插件任务执行引擎 — 异步后台执行 + 进程隔离。
+
+每任务独立 multiprocessing.Process（替代原 ProcessPoolExecutor），支持：
+- 取消即强杀（terminate→kill），不再"假取消"
+- wall-clock 超时强杀（settings.TASK_TIMEOUT_SEC），防永久卡死/池耗尽
+"""
 import asyncio
 import json
 import multiprocessing
 import os
 import time
 import traceback
-from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
 from multiprocessing.managers import SyncManager
 
+from backend.config import settings
 from backend.database import SessionLocal, TaskHistoryModel
 from backend.logger import logger
 
 _manager: SyncManager | None = None
+
 
 def _get_manager() -> SyncManager:
     global _manager
@@ -62,26 +68,38 @@ def _subprocess_entry(plugin_module_path, plugin_dir, module_name, class_name,
 
 
 class TaskRunner:
-    """异步插件任务执行器。"""
+    """异步插件任务执行器。每任务独立子进程，可取消（强杀）+ 超时强杀。"""
 
     def __init__(self, ws_manager=None):
         self._ws_manager = ws_manager
-        self._executor: ProcessPoolExecutor | None = None
         self._progress_queue: multiprocessing.Queue | None = None
-        self._active_tasks: dict[int, asyncio.Task] = {}
+        self._active_tasks: dict[int, asyncio.Task] = {}           # task_id -> 轮询协程
+        self._task_processes: dict[int, multiprocessing.Process] = {}  # task_id -> 子进程
         self._poll_task: asyncio.Task | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._results: dict[int, str] = {}      # task_id -> result_json
         self._errors: dict[int, str] = {}       # task_id -> error_traceback
 
-    def _ensure_executor(self):
-        if self._executor is None:
-            self._executor = ProcessPoolExecutor(max_workers=2)
+    def _ensure_queue(self):
+        if self._progress_queue is None:
             self._progress_queue = _get_manager().Queue()
+
+    @staticmethod
+    def _terminate_process(p: multiprocessing.Process):
+        """终止子进程：terminate → join(2) → 仍存活则 kill。"""
+        try:
+            if p.is_alive():
+                p.terminate()
+                p.join(2)
+                if p.is_alive():
+                    p.kill()
+                    p.join(2)
+        except Exception as e:
+            logger.error(f"终止子进程失败: {e}")
 
     async def start(self, plugin_instance, params: dict) -> int:
         """异步启动插件执行，立即返回task_id。"""
-        self._ensure_executor()
+        self._ensure_queue()
 
         # event loop 可能在测试隔离或运行时重建后关闭；若沿用旧 loop 会抛
         # "Event loop is closed"。检测后重新绑定，并废弃挂在旧 loop 上的 poll_task。
@@ -117,7 +135,7 @@ class TaskRunner:
         return task_id
 
     async def _run_in_subprocess(self, plugin_instance, params: dict, task_id: int):
-        """在子进程中执行插件并跟踪结果。"""
+        """启动独立子进程执行插件，等待 完成 / 超时 / 取消。"""
         start_time = time.time()
         manifest = plugin_instance.manifest
         entry = manifest.get("entry", "")
@@ -126,31 +144,45 @@ class TaskRunner:
 
         self._update_task(task_id, status="running", progress_message="执行中...")
 
+        params_json = json.dumps(params, ensure_ascii=False)
+        p = multiprocessing.Process(
+            target=_subprocess_entry,
+            args=(os.path.dirname(os.path.abspath(__file__)),
+                  plugin_dir, module_name, class_name,
+                  params_json, self._progress_queue, task_id),
+        )
+        # daemon=True：主进程退出时自动清理子进程，防僵尸。
+        # 代价：daemon 进程内不能再 spawn 子进程（当前插件均用线程池，不受影响）。
+        p.daemon = True
+        p.start()
+        self._task_processes[task_id] = p
+        logger.info(f"任务 {task_id} 已启动子进程 pid={p.pid}")
+
+        timeout = settings.TASK_TIMEOUT_SEC
         try:
-            params_json = json.dumps(params, ensure_ascii=False)
-            future = self._executor.submit(
-                _subprocess_entry,
-                os.path.dirname(os.path.abspath(__file__)),
-                plugin_dir, module_name, class_name,
-                params_json, self._progress_queue, task_id,
-            )
-
-            while not future.done():
+            while p.is_alive():
                 await asyncio.sleep(0.3)
+                if time.time() - start_time > timeout:
+                    logger.warning(
+                        f"任务 {task_id} 超时（>{timeout}秒），强制终止 pid={p.pid}"
+                    )
+                    self._terminate_process(p)
+                    elapsed_ms = int((time.time() - start_time) * 1000)
+                    self._update_task(
+                        task_id, status="error",
+                        progress_message=f"执行超时（超过 {timeout} 秒），已强制终止",
+                        error_traceback=(
+                            f"TaskTimeout: 任务执行超过 {timeout} 秒被强制终止。\n"
+                            "常见原因：搜索路径范围过大、网络盘无响应、或插件死循环。"
+                        ),
+                        duration_ms=elapsed_ms,
+                    )
+                    return
 
-            result_json = None
-            error_tb = None
-            try:
-                future.result()
-                # 从_results字典取结果（由_poll_progress存入）
-                await asyncio.sleep(0.2)
-                result_json = self._results.pop(task_id, None)
-                if not result_json:
-                    error_tb = self._errors.pop(task_id, None)
-            except Exception as e:
-                error_tb = traceback.format_exc()
-                logger.error(f"任务 {task_id} 执行异常: {e}")
-
+            # 子进程已结束 —— 给 _poll_progress 一点时间把队列里的 done/error 落到内存字典
+            await asyncio.sleep(0.3)
+            result_json = self._results.pop(task_id, None)
+            error_tb = self._errors.pop(task_id, None)
             elapsed_ms = int((time.time() - start_time) * 1000)
 
             if error_tb:
@@ -171,18 +203,28 @@ class TaskRunner:
                     duration_ms=elapsed_ms,
                 )
             else:
-                logger.error(f"任务 {task_id} 无返回结果（插件未正常输出）")
-                self._update_task(task_id, status="error", progress_message="无返回结果",
-                                  duration_ms=elapsed_ms)
-
+                logger.error(f"任务 {task_id} 无返回结果（子进程退出但未产出结果）")
+                self._update_task(
+                    task_id, status="error", progress_message="无返回结果",
+                    error_traceback="子进程退出但未返回任何结果（可能被外部信号终止）。",
+                    duration_ms=elapsed_ms,
+                )
         except asyncio.CancelledError:
+            # 前端点取消 → cancel() 取消本协程 → 在此强杀子进程并标记已取消
+            logger.info(f"任务 {task_id} 被取消，终止子进程 pid={getattr(p, 'pid', '?')}")
+            self._terminate_process(p)
             self._update_task(task_id, status="cancelled", progress_message="已取消")
         except Exception as e:
             logger.error(f"任务 {task_id} 执行异常: {e}")
-            self._update_task(task_id, status="error", progress_message=str(e),
-                              error_traceback=traceback.format_exc())
-
-        self._active_tasks.pop(task_id, None)
+            self._terminate_process(p)
+            self._update_task(
+                task_id, status="error", progress_message=str(e),
+                error_traceback=traceback.format_exc(),
+                duration_ms=int((time.time() - start_time) * 1000),
+            )
+        finally:
+            self._task_processes.pop(task_id, None)
+            self._active_tasks.pop(task_id, None)
 
     async def _poll_progress(self):
         """轮询进度队列并推送WebSocket。"""
@@ -219,10 +261,16 @@ class TaskRunner:
             await asyncio.sleep(0.2)
 
     async def cancel(self, task_id: int) -> bool:
-        """取消正在执行的任务。"""
+        """取消正在执行的任务：取消协程（触发强杀子进程）+ 兜底 terminate。"""
         atask = self._active_tasks.get(task_id)
         if atask and not atask.done():
+            # 取消协程 → 触发 _run_in_subprocess 的 CancelledError 分支 → terminate 子进程
             atask.cancel()
+            return True
+        # 协程已结束但进程残留（异常情况），兜底强杀
+        p = self._task_processes.get(task_id)
+        if p and p.is_alive():
+            self._terminate_process(p)
             return True
         return False
 
@@ -267,7 +315,11 @@ class TaskRunner:
             db.close()
 
     def shutdown(self):
-        if self._executor:
-            self._executor.shutdown(wait=False)
+        """程序退出时强杀所有存活子进程，防僵尸。"""
+        for task_id, p in list(self._task_processes.items()):
+            logger.info(f"关闭时终止任务 {task_id} 子进程 pid={getattr(p, 'pid', '?')}")
+            self._terminate_process(p)
+        self._task_processes.clear()
+        self._active_tasks.clear()
         if self._poll_task and not self._poll_task.done():
             self._poll_task.cancel()

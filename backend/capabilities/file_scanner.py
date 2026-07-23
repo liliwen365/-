@@ -3,8 +3,11 @@
 import os
 import fnmatch
 import glob
+import datetime
 import concurrent.futures
 
+from backend.logger import logger
+from backend.config import settings
 from backend.capabilities.progress import ParallelProgress
 
 
@@ -27,7 +30,8 @@ class ScanReport:
 
 
 def scan_directory(search_paths_str, filename_pattern,
-                   path_builder=None, pattern_builder=None):
+                   path_builder=None, pattern_builder=None,
+                   max_files=None, max_depth=None, on_progress=None):
     """扫描目录，查找匹配文件名模式的文件。
 
     Args:
@@ -35,11 +39,19 @@ def scan_directory(search_paths_str, filename_pattern,
         filename_pattern: fnmatch 文件名模式，支持分号分隔的多个模式
         path_builder: 可选，对每个展开路径做进一步替换
         pattern_builder: 可选，对文件名模式做进一步替换
+        max_files: 最多收集文件数（默认 settings.SCAN_MAX_FILES），防 OOM/无限递归
+        max_depth: os.walk 最大递归深度（默认 settings.SCAN_MAX_DEPTH），防扫整盘
+        on_progress: 可选回调 (current_dir, scanned_count)，每处理一个目录触发
 
     Returns: ScanReport
     """
     if not search_paths_str or not filename_pattern:
         return ScanReport(error="路径或模式为空")
+
+    if max_files is None:
+        max_files = settings.SCAN_MAX_FILES
+    if max_depth is None:
+        max_depth = settings.SCAN_MAX_DEPTH
 
     path_patterns = [p.strip() for p in str(search_paths_str).split(';') if p.strip()]
     expanded = [
@@ -55,17 +67,30 @@ def scan_directory(search_paths_str, filename_pattern,
         final_patterns = raw_patterns
 
     all_files = []
+    truncated = False
     for base_path in expanded:
         if path_builder:
             base_path = path_builder(base_path)
         if not os.path.isdir(base_path):
+            logger.warning(f"搜索路径不存在或不可访问: {base_path}")
             continue
-        for root, _, files in os.walk(base_path):
+        logger.info(f"开始扫描 {base_path}（深度上限 {max_depth}, 文件上限 {max_files}）")
+        base_depth = base_path.rstrip(os.sep).count(os.sep)
+        for root, dirs, files in os.walk(base_path):
+            # 深度剪枝：超过 max_depth 不再下钻子目录
+            cur_depth = root.rstrip(os.sep).count(os.sep) - base_depth
+            if cur_depth >= max_depth:
+                dirs[:] = []
+            # 进度回调：每个目录触发一次，让上层/前端知道在扫哪里
+            if on_progress:
+                try:
+                    on_progress(root, len(all_files))
+                except Exception:
+                    pass
             for name in files:
                 if any(fnmatch.fnmatch(name, pat) for pat in final_patterns):
                     fpath = os.path.join(root, name)
                     try:
-                        import datetime
                         fsize = os.path.getsize(fpath)
                         fmtime = datetime.datetime.fromtimestamp(
                             os.path.getmtime(fpath)
@@ -73,6 +98,16 @@ def scan_directory(search_paths_str, filename_pattern,
                     except OSError:
                         fsize, fmtime = 0, ""
                     all_files.append(ScanResult(fpath, name, fsize, fmtime))
+                    if len(all_files) >= max_files:
+                        truncated = True
+                        break
+            if truncated:
+                break
+        if truncated:
+            break
+
+    if truncated:
+        logger.warning(f"达到文件上限 {max_files}，扫描已截断（搜索路径范围可能过大）")
 
     # 去重
     seen = set()
@@ -82,6 +117,7 @@ def scan_directory(search_paths_str, filename_pattern,
             seen.add(f.path)
             unique.append(f)
 
+    logger.info(f"扫描完成: 匹配 {len(unique)} 个文件" + ("（已截断）" if truncated else ""))
     if not unique:
         return ScanReport(error="未找到匹配的文件")
     return ScanReport(files=unique)
