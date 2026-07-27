@@ -4,7 +4,8 @@
 
 #define AppName "LocalAgent"
 #define AppDisplayName "本地自动化平台"
-#define AppVersion "0.1.0"
+; 发版时与 backend/config.py 的 APP_VERSION 同步
+#define AppVersion "0.1.1"
 #define AppPublisher "Liliwen365"
 #define AppExeName "LocalAgent.exe"
 

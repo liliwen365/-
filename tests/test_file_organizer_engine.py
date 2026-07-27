@@ -273,8 +273,8 @@ class TestExecuteCopy:
         finally:
             os.sys.path[:] = sys_path_backup
 
-    def test_auto_disable_on_complete(self, tmp_path):
-        """任务完成后自动禁用enabled_scan/enabled_copy。"""
+    def test_keep_enabled_after_complete(self, tmp_path):
+        """增量语义:任务完成后不再自动关闭 enabled_scan/enabled_copy。"""
         src = tmp_path / "src"
         src.mkdir()
         (src / "f.pdf").write_text("x")
@@ -296,7 +296,42 @@ class TestExecuteCopy:
             ])
             updated_tasks, _ = execute_copy(tasks_df, plan_df)
             row = updated_tasks[updated_tasks["task_id"] == "T001"].iloc[0]
-            assert row["enabled_scan"] == False
-            assert row["enabled_copy"] == False
+            assert row["enabled_scan"] == True
+            assert row["enabled_copy"] == True
+        finally:
+            os.sys.path[:] = sys_path_backup
+
+    def test_copy_skip_existing(self, tmp_path):
+        """增量去重:目标已存在且大小一致 → skipped,不覆盖。"""
+        import time
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "f.pdf").write_text("same")
+
+        dest = tmp_path / "dest" / "T001"
+        dest.mkdir(parents=True)
+        dest_file = dest / "f.pdf"
+        dest_file.write_text("same")  # 目标已存在,大小一致
+        orig_mtime = dest_file.stat().st_mtime
+        time.sleep(0.1)  # 拉开时间差,确保若被覆盖 mtime 会变化
+
+        sys_path_backup = os.sys.path[:]
+        try:
+            if PLUGIN_DIR not in os.sys.path:
+                os.sys.path.insert(0, PLUGIN_DIR)
+            from engine import execute_copy
+
+            tasks_df = _make_tasks_df([
+                {"task_id": "T001", "dest_root": str(tmp_path / "dest"), "enabled_scan": True, "enabled_copy": True},
+            ])
+            plan_df = _make_tasks_df([
+                {"task_id": "T001", "copy_status": "待复制", "user_action": "",
+                 "source_path": str(src / "f.pdf"), "dest_path": str(dest_file)},
+            ])
+            _, updated_plan = execute_copy(tasks_df, plan_df)
+            skipped = updated_plan[updated_plan["copy_status"] == "已跳过"]
+            assert len(skipped) == 1
+            # mtime 未变 → 确认未被覆盖
+            assert dest_file.stat().st_mtime == orig_mtime
         finally:
             os.sys.path[:] = sys_path_backup

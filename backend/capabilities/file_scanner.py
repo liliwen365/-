@@ -68,14 +68,18 @@ def scan_directory(search_paths_str, filename_pattern,
 
     all_files = []
     truncated = False
+    _diag_per_path = []  # 零结果诊断:(实际路径, 是否存在, 深度内文件总数, 文件名样本)
     for base_path in expanded:
         if path_builder:
             base_path = path_builder(base_path)
         if not os.path.isdir(base_path):
             logger.warning(f"搜索路径不存在或不可访问: {base_path}")
+            _diag_per_path.append((base_path, False, 0, []))
             continue
         logger.info(f"开始扫描 {base_path}（深度上限 {max_depth}, 文件上限 {max_files}）")
         base_depth = base_path.rstrip(os.sep).count(os.sep)
+        _diag_samples = []   # 本路径文件名样本(不论是否匹配),零结果时对照模式用
+        _diag_total = 0      # 本路径深度内列举到的文件总数
         for root, dirs, files in os.walk(base_path):
             # 深度剪枝：超过 max_depth 不再下钻子目录
             cur_depth = root.rstrip(os.sep).count(os.sep) - base_depth
@@ -87,6 +91,13 @@ def scan_directory(search_paths_str, filename_pattern,
                     on_progress(root, len(all_files))
                 except Exception:
                     pass
+            # 收集诊断样本(不论是否匹配),零结果时用于对照"实际文件名 vs 匹配模式"
+            _diag_total += len(files)
+            if len(_diag_samples) < 15:
+                for name in files:
+                    if len(_diag_samples) >= 15:
+                        break
+                    _diag_samples.append(name)
             for name in files:
                 if any(fnmatch.fnmatch(name, pat) for pat in final_patterns):
                     fpath = os.path.join(root, name)
@@ -103,6 +114,7 @@ def scan_directory(search_paths_str, filename_pattern,
                         break
             if truncated:
                 break
+        _diag_per_path.append((base_path, True, _diag_total, _diag_samples))
         if truncated:
             break
 
@@ -119,6 +131,22 @@ def scan_directory(search_paths_str, filename_pattern,
 
     logger.info(f"扫描完成: 匹配 {len(unique)} 个文件" + ("（已截断）" if truncated else ""))
     if not unique:
+        # 零结果诊断:逐路径列出 存在性/深度内文件数/文件名样本,
+        # 让用户对照"实际文件名 vs 匹配模式",判断是 配置错、路径错、网络盘时机、还是深度剪枝
+        logger.warning(f"未找到匹配文件。匹配模式: {final_patterns}")
+        for path, existed, total, samples in _diag_per_path:
+            if not existed:
+                logger.warning(f"  ✗ 路径不存在或不可访问(检查盘符映射/网络盘可达): {path}")
+            elif total == 0:
+                logger.warning(
+                    f"  ✗ 路径 {path}: 深度({max_depth})内无任何文件 "
+                    f"(目录为空,或文件在更深的子目录被剪枝——可调大 SCAN_MAX_DEPTH)"
+                )
+            else:
+                logger.warning(
+                    f"  ✗ 路径 {path}: 深度内共 {total} 个文件,均不匹配模式。"
+                    f" 文件名样本: {samples}"
+                )
         return ScanReport(error="未找到匹配的文件")
     return ScanReport(files=unique)
 

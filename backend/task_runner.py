@@ -42,6 +42,10 @@ def _subprocess_entry(plugin_module_path, plugin_dir, module_name, class_name,
         sys.path.remove(plugin_dir)
     sys.path.insert(0, plugin_dir)
 
+    # 显式触发日志配置:Windows spawn 子进程不继承主进程的 loguru sink,
+    # 必须在此 import 一次,否则不直接 import backend.logger 的插件(如 bank/stock)子进程日志全部丢失
+    from backend.logger import logger  # noqa: F401
+
     module_file = os.path.join(plugin_dir, f"{module_name}.py")
     spec = importlib.util.spec_from_file_location(module_name, module_file)
     module = importlib.util.module_from_spec(spec)
@@ -156,7 +160,18 @@ class TaskRunner:
         p.daemon = True
         p.start()
         self._task_processes[task_id] = p
-        logger.info(f"任务 {task_id} 已启动子进程 pid={p.pid}")
+        plugin_name = manifest.get("name", "")
+        action = params.get("action", "")
+        feature_id = params.get("feature_id", "")
+        _parts = []
+        if isinstance(params.get("tasks"), list):
+            _parts.append(f"任务{len(params['tasks'])}")
+        if isinstance(params.get("rules"), list):
+            _parts.append(f"规则{len(params['rules'])}")
+        logger.info(
+            f"任务 {task_id} 启动: 插件={plugin_name} 动作={action or '-'} "
+            f"功能={feature_id or '-'} {' '.join(_parts)} pid={p.pid}"
+        )
 
         timeout = settings.TASK_TIMEOUT_SEC
         try:

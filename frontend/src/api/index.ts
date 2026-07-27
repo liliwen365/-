@@ -51,6 +51,7 @@ export default api
 export const systemApi = {
   getInfo: () => api.get('/api/system/info'),
   openFolder: (path: string) => api.post('/api/system/open-folder', { path }),
+  getDiagnostic: () => api.get('/api/system/diagnostic'),
 }
 
 export const authApi = {

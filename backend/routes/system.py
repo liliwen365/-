@@ -6,7 +6,7 @@ import subprocess
 from fastapi import APIRouter
 from pydantic import BaseModel as PydanticModel
 
-from backend.config import settings
+from backend.config import settings, BUILD_COMMIT, BUILD_TIME
 from backend.auth import SecurityManager
 from backend.database import SessionLocal, TaskHistoryModel
 
@@ -19,9 +19,12 @@ def system_info():
     return {
         "app_name": settings.APP_NAME,
         "version": settings.APP_VERSION,
+        "build_commit": BUILD_COMMIT,
+        "build_time": BUILD_TIME,
         "platform": platform.system(),
         "machine_id": security.get_machine_id(),
         "data_dir": settings.DATA_DIR,
+        "log_dir": os.path.join(settings.DATA_DIR, "logs"),
     }
 
 
@@ -107,7 +110,8 @@ def system_stats():
 
 @router.get("/diagnostic")
 def diagnostic():
-    """插件加载诊断 — 浏览器直接访问查看。"""
+    """系统诊断信息 — 供"复制诊断信息"使用,报障时贴给开发者快速定位环境;
+    同时保留插件加载诊断字段,供浏览器直接访问调试。"""
     from backend.app import plugin_manager
     import sys as _sys
 
@@ -125,7 +129,33 @@ def diagnostic():
 
     plugin_modules = {k: str(v) for k, v in _sys.modules.items() if '_plugin_' in k}
 
+    # 最近 10 条任务,排查"扫不到/失败"时定位上下文
+    recent_tasks = []
+    db = SessionLocal()
+    try:
+        rows = db.query(TaskHistoryModel).order_by(TaskHistoryModel.id.desc()).limit(10).all()
+        for r in rows:
+            recent_tasks.append({
+                "id": r.id,
+                "plugin": r.plugin_name,
+                "feature": r.feature_id or "",
+                "status": r.status,
+                "created": r.created_at.strftime("%Y-%m-%d %H:%M") if r.created_at else "",
+                "duration_ms": r.duration_ms,
+                "error": (r.error_traceback or "")[:200],
+            })
+    finally:
+        db.close()
+
     return {
+        # 版本与环境(报障对齐用)
+        "version": settings.APP_VERSION,
+        "build_commit": BUILD_COMMIT,
+        "build_time": BUILD_TIME,
+        "platform": platform.system(),
+        "log_dir": os.path.join(settings.DATA_DIR, "logs"),
+        "recent_tasks": recent_tasks,
+        # 插件加载诊断(原有,保留)
         "plugins_loaded": loaded,
         "plugins_count": len(loaded),
         "plugins_dir": settings.PLUGINS_DIR,

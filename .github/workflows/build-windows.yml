@@ -37,8 +37,10 @@ jobs:
         npm install
         npm run build
 
-    - name: Build exe with PyInstaller
-      run: pyinstaller build.spec --clean --noconfirm
+    - name: Build exe (注入构建号 + PyInstaller)
+      # 必须跑 build.py 而非直接 pyinstaller:前者会先 write_build_info 注入 git commit + 构建时间,
+      # 否则前端版本号显示 "(dev)",无法对齐同事机器跑的是哪个构建
+      run: python build.py --skip-npm --skip-iss
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4

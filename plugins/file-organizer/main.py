@@ -3,6 +3,7 @@
 import json
 import pandas as pd
 from backend.base_plugin import BasePlugin
+from backend.logger import logger
 from engine import scan_tasks, execute_copy
 
 
@@ -28,6 +29,7 @@ class FileOrganizerPlugin(BasePlugin):
         tasks_data = params.get("tasks", [])
         rules_data = params.get("rules", [])
         action = params.get("action", "scan")
+        logger.info(f"[file-organizer] 执行 action={action} 任务={len(tasks_data)} 规则={len(rules_data)}")
 
         # 确保keywords字段是dict而非JSON字符串
         for t in tasks_data:
@@ -59,10 +61,11 @@ class FileOrganizerPlugin(BasePlugin):
                 return {"status": "error", "summary": "没有可执行的复制计划", "data": {}}
             tasks_df, plan_df = execute_copy(tasks_df, plan_df, on_progress=progress_callback)
             copied = len(plan_df[plan_df["copy_status"] == "已复制"])
+            skipped = len(plan_df[plan_df["copy_status"] == "已跳过"])
             failed = len(plan_df[plan_df["copy_status"] == "复制失败"])
             return {
                 "status": "success",
-                "summary": f"复制完成：成功 {copied}，失败 {failed}",
+                "summary": f"复制完成：成功 {copied}，跳过 {skipped}（已存在），失败 {failed}",
                 "data": {"tasks": tasks_df.to_dict("records"), "plan": plan_df.to_dict("records")},
             }
 

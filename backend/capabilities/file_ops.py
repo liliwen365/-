@@ -21,7 +21,7 @@ class CopyResult:
 
 
 def copy_file(source, dest, retry_attempts=3, retry_delay=1.0):
-    """复制单个文件，自动创建目标目录，支持重试。
+    """复制单个文件，自动创建目标目录，支持重试。目标已存在且大小相同则跳过(增量去重)。
 
     Returns: CopyResult
     """
@@ -30,6 +30,13 @@ def copy_file(source, dest, retry_attempts=3, retry_delay=1.0):
             if not source or not dest:
                 return CopyResult(source, dest, "failure", "路径为空")
             os.makedirs(os.path.dirname(dest), exist_ok=True)
+            # 增量去重:目标已存在且大小一致则跳过,避免每次扫描重复覆盖已整理过的文件
+            if os.path.exists(dest):
+                try:
+                    if os.path.getsize(source) == os.path.getsize(dest):
+                        return CopyResult(source, dest, "skipped", "目标已存在(大小一致)")
+                except OSError:
+                    pass
             shutil.copy2(source, dest)
             return CopyResult(source, dest, "success", dest)
         except PermissionError:

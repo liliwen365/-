@@ -18,6 +18,39 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 
 
+# 开发占位:repo 里 _build_info.py 始终保持这个内容,真实构建号只在打包时由 write_build_info
+# 临时写入、打包后还原回来,避免本地跑 build.py 污染 git
+_BUILD_INFO_PLACEHOLDER = (
+    '# -*- coding: utf-8 -*-\n'
+    '"""构建信息 — 开发环境占位;打包时由 build.py 自动重写(勿手动编辑)。"""\n'
+    'BUILD_COMMIT = "dev"\n'
+    'BUILD_TIME = ""\n'
+)
+
+
+def write_build_info():
+    """采集 git commit + 构建时间,写入 backend/_build_info.py。
+    打包产物运行时读取,前端显示 "版本 (commit, 时间)",防止改了代码没重打包导致版本错位。
+    """
+    import datetime
+    try:
+        commit = subprocess.run(
+            "git rev-parse --short HEAD", shell=True,
+            capture_output=True, text=True,
+        ).stdout.strip() or "unknown"
+    except Exception:
+        commit = "unknown"
+    build_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    content = (
+        "# -*- coding: utf-8 -*-\n"
+        '"""构建信息 — 由 build.py 自动生成,勿手动编辑。"""\n'
+        f'BUILD_COMMIT = "{commit}"\n'
+        f'BUILD_TIME = "{build_time}"\n'
+    )
+    (ROOT / "backend" / "_build_info.py").write_text(content, encoding="utf-8")
+    print(f"  构建信息: commit={commit} time={build_time}")
+
+
 def run(cmd, cwd=None):
     print(f"\n>>> {cmd}")
     result = subprocess.run(cmd, shell=True, cwd=cwd or ROOT)
@@ -52,9 +85,13 @@ def main():
         sys.exit(1)
     print(f"  前端产物: {dist_dir}")
 
-    # 3. PyInstaller 打包
-    print("\n[2/4] PyInstaller 打包...")
+    # 3. 注入构建号 + PyInstaller 打包
+    print("\n[2/4] 注入构建号并 PyInstaller 打包...")
+    write_build_info()
     run("pyinstaller build.spec --clean --noconfirm")
+    # 打包产物已嵌入真实构建号,把源码树还原为开发占位,保持 git 干净
+    (ROOT / "backend" / "_build_info.py").write_text(_BUILD_INFO_PLACEHOLDER, encoding="utf-8")
+    print("  已还原 _build_info.py 为开发占位")
 
     exe_path = ROOT / "dist" / "LocalAgent" / "LocalAgent.exe"
     if not exe_path.exists():

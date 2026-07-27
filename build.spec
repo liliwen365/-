@@ -31,6 +31,7 @@ hiddenimports = [
     # backend 所有路由和模块
     'backend.app',
     'backend.config',
+    'backend._build_info',
     'backend.database',
     'backend.logger',
     'backend.auth',

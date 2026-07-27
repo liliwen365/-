@@ -3,7 +3,12 @@
     <el-aside width="200px" class="sidebar">
       <div class="logo">
         <el-icon size="24"><Monitor /></el-icon>
-        <span>本地自动化平台</span>
+        <div class="logo-text">
+          <span>本地自动化平台</span>
+          <span class="version-text" @click="copyVersion" title="点击复制版本号">
+            v{{ sysInfo.version || '...' }}<template v-if="sysInfo.build_commit && sysInfo.build_commit !== 'dev'"> ({{ sysInfo.build_commit }})</template>
+          </span>
+        </div>
       </div>
       <el-menu :default-active="route.path" router class="sidebar-menu">
         <template v-if="authStore.activated">
@@ -56,19 +61,48 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, reactive } from 'vue'
 import { useRoute } from 'vue-router'
 import { usePluginStore } from '@/stores/plugin'
 import { useAuthStore } from '@/stores/auth'
+import { systemApi } from '@/api'
+import { ElMessage } from 'element-plus'
 import { Timer } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const pluginStore = usePluginStore()
 const authStore = useAuthStore()
+// 系统信息(版本/构建号)显示在侧边栏,报障时一眼对齐版本
+const sysInfo = reactive<{ version?: string; build_commit?: string; build_time?: string }>({})
+
+function copyVersion() {
+  const v = `v${sysInfo.version || '?'} (${sysInfo.build_commit || '?'}, ${sysInfo.build_time || '?'})`
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(v)
+    } else {
+      const ta = document.createElement('textarea')
+      ta.value = v
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+    }
+    ElMessage.success('版本号已复制')
+  } catch {
+    ElMessage.warning('复制失败,版本号见侧边栏')
+  }
+}
 
 onMounted(async () => {
   await authStore.checkStatus()
   await pluginStore.fetchPlugins()
+  try {
+    const { data } = await systemApi.getInfo()
+    Object.assign(sysInfo, data)
+  } catch {
+    // silent: 版本显示是辅助功能,失败不影响使用
+  }
   // 动态路由由router.beforeEach守卫加载，此处不再调用setupDynamicRoutes
 })
 </script>
@@ -82,6 +116,9 @@ onMounted(async () => {
 .sidebar-menu .el-menu-item.is-active { background: #ffffff1a; color: #fff; }
 .sidebar-menu .el-menu-item-group__title { color: #ffffffa6; font-size: 12px; padding: 16px 0 4px 20px; }
 .logo { height: 56px; display: flex; align-items: center; gap: 8px; padding: 0 20px; color: #fff; font-size: 16px; font-weight: 600; border-bottom: 1px solid #ffffff1a; }
+.logo-text { display: flex; flex-direction: column; line-height: 1.2; }
+.version-text { font-size: 11px; font-weight: 400; color: #ffffff80; cursor: pointer; }
+.version-text:hover { color: #fff; }
 .header { background: #fff; border-bottom: 1px solid #e8e8e8; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; }
 .page-title { font-size: 16px; font-weight: 600; color: #333; }
 .main-content { background: #f5f5f5; overflow-y: auto; }

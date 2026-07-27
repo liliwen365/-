@@ -11,7 +11,8 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     APP_NAME: str = "本地自动化平台"
-    APP_VERSION: str = "0.1.0"
+    # 发版时改这里,并同步 setup.iss 的 AppVersion;构建号(commit+时间)由 build.py 自动注入 _build_info.py
+    APP_VERSION: str = "0.1.1"
     HOST: str = "127.0.0.1"
     PORT: int = 8088
     DEBUG: bool = False
@@ -71,3 +72,10 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# 构建信息:打包时由 build.py 写入 backend/_build_info.py,开发态为占位值。
+# 前端据此显示 "版本 (commit, 时间)",防止"改了代码没重打包"导致的版本错位排查。
+try:
+    from backend._build_info import BUILD_COMMIT, BUILD_TIME  # noqa: E402
+except Exception:
+    BUILD_COMMIT, BUILD_TIME = "dev", ""

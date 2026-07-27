@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """模板替换引擎 - 从 rules.py 提取的通用占位符替换能力"""
+from backend.logger import logger
 
 
 def substitute_placeholders(template, variables, placeholder_map=None):
@@ -29,7 +30,13 @@ def build_path(path_template, path_keyword=None, override=None, placeholder_map=
     variables = {}
     if path_keyword is not None:
         variables["PathKeyword"] = str(path_keyword)
-    return substitute_placeholders(path_template, variables, placeholder_map)
+    result = substitute_placeholders(path_template, variables, placeholder_map)
+    # 路径里残留未替换占位符(如 {PathKeyword})通常是配置缺关键词,会导致"找不到文件",告警高亮
+    if '{' in result and '}' in result:
+        logger.warning(f"build_path: 路径仍含未替换占位符 → {result!r}(模板={path_template!r}, 路径关键词={path_keyword!r})")
+    else:
+        logger.debug(f"build_path: 模板={path_template!r} 路径关键词={path_keyword!r} → {result!r}")
+    return result
 
 
 def build_filename_pattern(pattern_template, primary_keyword="", doc_type="", placeholder_map=None):
@@ -45,4 +52,9 @@ def build_filename_pattern(pattern_template, primary_keyword="", doc_type="", pl
         "PrimaryKeyword": str(primary_keyword or ''),
         "DocumentType": str(doc_type or ''),
     }
-    return substitute_placeholders(pattern_template, variables, placeholder_map)
+    result = substitute_placeholders(pattern_template, variables, placeholder_map)
+    if '{' in result and '}' in result:
+        logger.warning(f"build_filename_pattern: 模式仍含未替换占位符 → {result!r}(模板={pattern_template!r}, 文件关键词={primary_keyword!r})")
+    else:
+        logger.debug(f"build_filename_pattern: 模板={pattern_template!r} 文件关键词={primary_keyword!r} → {result!r}")
+    return result

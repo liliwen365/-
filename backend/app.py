@@ -65,7 +65,7 @@ async def _restore_schedules():
 def create_app() -> FastAPI:
     app = FastAPI(
         title="本地自动化平台",
-        version="0.1.0",
+        version=settings.APP_VERSION,
         lifespan=lifespan,
     )
 

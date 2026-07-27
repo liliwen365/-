@@ -48,6 +48,7 @@ def _scan_one_task(task_row, active_rules, on_dir_progress=None):
         path_kw_list = type_keywords.get('path', []) or default_path_kw
 
         if not file_kw_list:
+            logger.warning(f"[任务{task_id}] 分类={doc_type} 未配置文件关键词,该规则被跳过(请在任务「关键字配置」里为此分类填入文件关键词)")
             continue
         if not path_kw_list:
             path_kw_list = [None]
@@ -55,12 +56,21 @@ def _scan_one_task(task_row, active_rules, on_dir_progress=None):
         for path_keyword in path_kw_list:
             for filename_keyword in file_kw_list:
                 final_search_path = build_search_path(rule_path_template, path_keyword, override_path)
+                final_pattern = build_filename_pattern(rule_row['filename_pattern'], filename_keyword, doc_type)
+                logger.debug(
+                    f"[任务{task_id}] 分类={doc_type} 路径关键词={path_keyword or '无'} "
+                    f"文件关键词={filename_keyword} | 搜索路径={final_search_path} | 模式={final_pattern}"
+                )
                 report = scan_directory(
                     final_search_path, rule_row['filename_pattern'],
                     pattern_builder=lambda p, _kw=filename_keyword, _dt=doc_type:
                         build_filename_pattern(p, _kw, _dt),
                     on_progress=on_dir_progress,
                 )
+                if report.error:
+                    logger.debug(f"[任务{task_id}] 分类={doc_type} 路径={final_search_path} → {report.error}")
+                else:
+                    logger.debug(f"[任务{task_id}] 分类={doc_type} 路径={final_search_path} → 匹配 {len(report.files)} 个文件")
 
                 base_record = {
                     'task_id': task_id,
@@ -115,7 +125,11 @@ def scan_tasks(tasks_df, rules_df, on_progress=None):
     )]
 
     if tasks_to_scan.empty or active_rules.empty:
-        logger.info("没有需要扫描的任务或没有启用的规则")
+        # 分别报数,排查时一眼分清是"任务扫描开关全关"还是"规则全关"
+        logger.info(
+            f"未进入扫描: 任务 {len(tasks_to_scan)}/{len(tasks_df)} 开启扫描({scan_col}), "
+            f"规则 {len(active_rules)}/{len(rules_df)} 启用"
+        )
         return tasks_df, pd.DataFrame()
 
     plan_records = []
@@ -193,33 +207,47 @@ def execute_copy(tasks_df, plan_df, on_progress=None, retry_attempts=3, retry_de
 
         for i, result in enumerate(results):
             idx = copy_indices[i]
-            plan_df.loc[idx, 'dest_path'] = result.message if result.status == "success" else ""
-            plan_df.loc[idx, 'copy_status'] = '已复制' if result.status == "success" else '复制失败'
-            plan_df.loc[idx, 'error_msg'] = result.message if result.status != "success" else ""
+            if result.status == "success":
+                plan_df.loc[idx, 'copy_status'] = '已复制'
+                plan_df.loc[idx, 'dest_path'] = result.message
+                plan_df.loc[idx, 'error_msg'] = ""
+            elif result.status == "skipped":
+                # 目标已存在(去重跳过),保留原 dest_path 不清空
+                plan_df.loc[idx, 'copy_status'] = '已跳过'
+                plan_df.loc[idx, 'error_msg'] = result.message
+            else:
+                plan_df.loc[idx, 'copy_status'] = '复制失败'
+                plan_df.loc[idx, 'error_msg'] = result.message
 
-    # 更新任务状态
+    # 更新任务状态。增量语义:完成后不再自动关闭扫描/复制开关,下次仍可扫描新增文件;
+    # 已整理过的文件由 copy_file 去重(目标存在→skipped)避免重复覆盖。
     tasks_df = tasks_df.set_index('task_id')
     for task_id, group in plan_df.groupby('task_id'):
         copied = (group['copy_status'] == '已复制').sum()
-        status = "执行出错"
-        if (copied + (group['copy_status'] == '用户跳过').sum()) == len(group):
-            status = "已完成" if copied > 0 else "已跳过"
-        elif copied > 0:
-            status = "部分完成"
-        scan_summary = f"执行于 {datetime.datetime.now().strftime('%H:%M')}, {copied}/{len(group)} 文件成功。"
+        failed = (group['copy_status'] == '复制失败').sum()
+        skipped_exist = (group['copy_status'] == '已跳过').sum()
+        if failed > 0:
+            status = "部分完成" if copied > 0 else "执行出错"
+        else:
+            # 无失败:复制了新文件→已完成;全是已存在/用户跳过→无新增
+            status = "已完成" if copied > 0 else "无新增"
+        scan_summary = (
+            f"执行于 {datetime.datetime.now().strftime('%H:%M')}, "
+            f"新增{copied} 已存在{skipped_exist} 失败{failed}。"
+        )
 
         if task_id in tasks_df.index:
             tasks_df.loc[task_id, ['status', 'scan_summary']] = status, scan_summary
-            if status == "已完成":
-                for col in ['enabled_scan', 'enabled_copy', 'enabled']:
-                    if col in tasks_df.columns:
-                        tasks_df.loc[task_id, col] = False
 
     tasks_df = tasks_df.reset_index()
 
-    copied_count = len(plan_df[plan_df['copy_status'] == '已复制'])
-    failed_count = len(plan_df[plan_df['copy_status'] == '复制失败'])
-    skipped_count = skip_mask.sum()
-    logger.info(f"复制完成: 成功{copied_count}, 失败{failed_count}, 跳过{skipped_count}")
+    copied_count = (plan_df['copy_status'] == '已复制').sum()
+    failed_count = (plan_df['copy_status'] == '复制失败').sum()
+    skipped_exist = (plan_df['copy_status'] == '已跳过').sum()
+    skipped_user = skip_mask.sum()
+    logger.info(
+        f"复制完成: 成功{copied_count}, 失败{failed_count}, "
+        f"跳过{skipped_exist}(已存在)+{skipped_user}(用户)"
+    )
 
     return tasks_df, plan_df

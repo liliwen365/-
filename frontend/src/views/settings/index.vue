@@ -25,19 +25,92 @@
         </el-button>
       </div>
     </el-card>
+
+    <el-card style="margin-top: 16px">
+      <template #header>关于</template>
+      <el-descriptions :column="1" border>
+        <el-descriptions-item label="版本">
+          v{{ sysInfo.version || '...' }}
+          <span v-if="sysInfo.build_commit && sysInfo.build_commit !== 'dev'" style="color:#909399;font-size:12px;margin-left:8px">
+            ({{ sysInfo.build_commit }}, {{ sysInfo.build_time }})
+          </span>
+        </el-descriptions-item>
+        <el-descriptions-item label="操作系统">{{ sysInfo.platform || '...' }}</el-descriptions-item>
+        <el-descriptions-item label="数据存储位置">{{ sysInfo.data_dir || '...' }}</el-descriptions-item>
+      </el-descriptions>
+      <div style="margin-top: 12px; display: flex; gap: 8px">
+        <el-button size="small" @click="openLogDir">打开日志目录</el-button>
+        <el-button size="small" @click="copyDiagnostic">复制诊断信息</el-button>
+      </div>
+    </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { systemApi } from '@/api'
 import { ElMessage } from 'element-plus'
 
 const authStore = useAuthStore()
 const licenseCode = ref('')
 const activating = ref(false)
+const sysInfo = reactive<any>({})
 
-onMounted(() => authStore.checkStatus())
+onMounted(async () => {
+  authStore.checkStatus()
+  try {
+    const { data } = await systemApi.getInfo()
+    Object.assign(sysInfo, data)
+  } catch {
+    // silent
+  }
+})
+
+async function openLogDir() {
+  const logDir = sysInfo.log_dir
+  if (!logDir) { ElMessage.warning('未知日志目录'); return }
+  try {
+    const { data } = await systemApi.openFolder(logDir)
+    if (!data.success) ElMessage.error(data.message || '打开失败,日志目录可能尚未生成')
+  } catch {
+    ElMessage.error('打开日志目录失败')
+  }
+}
+
+async function copyDiagnostic() {
+  try {
+    const { data } = await systemApi.getDiagnostic()
+    const tasks = (data.recent_tasks || []).map((t: any) =>
+      `  #${t.id} ${t.plugin}/${t.feature || '-'} ${t.status} ${t.created}${t.error ? ' ⚠' + t.error : ''}`
+    )
+    const lines = [
+      '=== 本地自动化平台 诊断信息 ===',
+      `版本: v${data.version} (${data.build_commit}, ${data.build_time})`,
+      `系统: ${data.platform}`,
+      `数据目录: ${data.data_dir}`,
+      `日志目录: ${data.log_dir}`,
+      `插件(${data.plugins_count}): ${(data.plugins_loaded || []).join(', ') || '无'}`,
+      (data.load_errors?.length ? `插件加载错误: ${JSON.stringify(data.load_errors)}` : ''),
+      '最近任务:',
+      ...tasks,
+    ].filter(Boolean)
+    const text = lines.join('\n')
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+    }
+    ElMessage.success('诊断信息已复制,可粘贴发给开发者')
+  } catch {
+    ElMessage.error('获取诊断信息失败')
+  }
+}
 
 function copyMachineId() {
   const text = authStore.machineId

@@ -86,10 +86,17 @@
     <!-- File-organizer: tasks table -->
     <el-card v-if="isFileOrganizer && tasksParam" style="margin-top: 16px">
       <template #header>
-        <span>任务清单</span>
-        <span style="color: #999; font-size: 12px; margin-left: 8px">
-          点击「添加」新增任务，或「批量导入」从Excel粘贴。点击「关键字配置」列设置各分类的关键词
-        </span>
+        <div style="display: flex; align-items: center; justify-content: space-between">
+          <span>任务清单</span>
+          <div>
+            <span style="color: #999; font-size: 12px; margin-right: 12px">
+              点击「添加」新增任务，或「批量导入」从Excel粘贴。点击「关键字配置」列设置各分类的关键词
+            </span>
+            <el-button size="small" type="primary" plain :disabled="!formData.tasks?.length" @click="enableAllScan">
+              全部启用扫描
+            </el-button>
+          </div>
+        </div>
       </template>
       <SchemaTable :schema="tasksParam" v-model="formData.tasks" :rules-data="formData.rules" />
     </el-card>
@@ -147,6 +154,7 @@
         <el-tag type="success" style="margin-left: 8px">找到 {{ foundCount }} 个文件</el-tag>
         <el-tag v-if="failCount" type="danger" style="margin-left: 4px">{{ failCount }} 项查找失败</el-tag>
         <el-tag v-if="copyDone && copiedCount" type="success" style="margin-left: 4px">已复制 {{ copiedCount }}</el-tag>
+        <el-tag v-if="copyDone && skippedCount" type="info" style="margin-left: 4px">已跳过 {{ skippedCount }}(已存在)</el-tag>
         <el-tag v-if="copyDone && failedCount" type="danger" style="margin-left: 4px">失败 {{ failedCount }}</el-tag>
       </template>
       <el-table :data="plan" max-height="400" size="small" border>
@@ -154,7 +162,7 @@
         <el-table-column prop="doc_type" label="分类" width="80" />
         <el-table-column label="状态" width="90">
           <template #default="{ row }">
-            <el-tag v-if="row.copy_status" :type="row.copy_status === '已复制' ? 'success' : row.copy_status === '用户跳过' ? 'info' : 'danger'" size="small">{{ row.copy_status }}</el-tag>
+            <el-tag v-if="row.copy_status" :type="row.copy_status === '已复制' ? 'success' : (row.copy_status === '用户跳过' || row.copy_status === '已跳过') ? 'info' : 'danger'" size="small">{{ row.copy_status }}</el-tag>
             <el-tag v-else :type="row.find_status === '已找到' ? 'success' : 'danger'" size="small">{{ row.find_status }}</el-tag>
           </template>
         </el-table-column>
@@ -428,6 +436,7 @@ const foundCount = computed(() => plan.value.filter(r => r.find_status === '已�
 const failCount = computed(() => plan.value.filter(r => r.find_status === '查找失败').length)
 const copiedCount = computed(() => plan.value.filter(r => r.copy_status === '已复制').length)
 const failedCount = computed(() => plan.value.filter(r => r.copy_status === '复制失败').length)
+const skippedCount = computed(() => plan.value.filter(r => r.copy_status === '已跳过').length)
 
 function formatSize(bytes: number): string {
   if (!bytes) return ''
@@ -497,6 +506,18 @@ async function onLoadTemplate(name: string) {
   } catch (e: any) {
     ElMessage.error(e.response?.data?.detail || '加载模板失败')
   }
+}
+
+// 一键启用所有任务的扫描(及复制)开关——用于恢复被自动关闭的任务,或日常批量开启
+function enableAllScan() {
+  const tasks = formData.value.tasks
+  if (!tasks?.length) return
+  tasks.forEach((t: any) => {
+    t.enabled_scan = true
+    if ('enabled_copy' in t) t.enabled_copy = true
+  })
+  ElMessage.success(`已启用 ${tasks.length} 个任务的扫描与复制`)
+  // formData 为 deep watch,改动会自动触发 saveConfig
 }
 
 // --- File-organizer: Scan + Copy ---
